@@ -1,0 +1,350 @@
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody))]
+public class MomentumMovement : MonoBehaviour
+{
+    [Header("Movement Settings")]
+    [Range(20f, 100f)] public float moveSpeed = 50f;
+    [Range(1f, 500f)] public float maxSpeed = 150f;
+    [Range(20f, 150f)] public float acceleration = 50f;
+    [Range(0f, 1f)] public float airControl = 0.5f;
+
+    [Header("Gravity Settings")]
+    [Range(1f, 5f)] public float gravityMultiplier = 2.5f;
+
+    [Header("Jump Settings")]
+    [Range(1f, 20f)] public float jumpForce = 12f;
+
+    [Header("Slide Settings")]
+    [Range(1f, 20f)] public float slideMinSpeed = 5f;
+    [Range(0f, 75f)] public float slideBoost = 30f;
+    [Range(0f, 1f)] public float slideFriction = 0.1f;
+    [Range(0.1f, 1f)] public float slideHeight = 0.5f;
+    [Range(0f, 45f)] public float slideTiltAngle = 15f;
+
+    [Header("Wall Slide Settings")]
+    [Range(1f, 20f)] public float wallSlideSpeed = 2f;
+    [Range(1f, 20f)] public float wallJumpForce = 15f;
+    [Range(0f, 2f)] public float wallJumpDuration = 0.2f;
+
+    [Header("Wall Slide Tilt")]
+    public bool enableWallSlideTilt = true;
+    [Range(0f, 45f)] public float wallSlideTiltAngle = 15f;
+
+    [Header("Drag Settings")]
+    [Range(0f, 10f)] public float groundDrag = 5f;
+    [Range(0f, 10f)] public float airDrag = 0.5f;
+
+    [Header("Ground Check")]
+    public LayerMask groundMask;
+    [Range(0.1f, 1f)] public float groundDistance = 0.2f;
+
+    [Header("References")]
+    public Transform playerModel;
+
+    Rigidbody rb;
+    CapsuleCollider capsuleCollider;
+
+    Vector3 moveInput;
+    Vector3 wallNormal;
+    Vector3 slideDirection;
+
+    bool isGrounded;
+    bool isSliding;
+    bool isWallSliding;
+
+    float normalHeight;
+    float wallJumpTimer;
+
+    float coyoteTime = 0.1f;
+    float coyoteCounter;
+
+    void Start()
+    {
+        rb = GetComponent<Rigidbody>();
+        capsuleCollider = GetComponentInChildren<CapsuleCollider>();
+
+        rb.freezeRotation = true;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+
+        CreateFrictionlessMaterial();
+        normalHeight = capsuleCollider ? capsuleCollider.height : 2f;
+    }
+
+    void Update()
+    {
+        CheckGround();
+        HandleInput();
+        HandleSlide();
+
+        if (!isWallSliding && !isSliding)
+            ResetModelRotation();
+
+        if (isGrounded)
+            coyoteCounter = coyoteTime;
+        else
+            coyoteCounter -= Time.deltaTime;
+
+        if (wallJumpTimer > 0f)
+            wallJumpTimer -= Time.deltaTime;
+    }
+
+    void FixedUpdate()
+    {
+        if (wallJumpTimer <= 0f)
+            MovePlayer();
+
+        HandleWallSlidePhysics();
+        ApplyExtraGravity();
+        ApplyDamping();
+        ClampSpeed();
+    }
+
+    // -------------------- Helpers --------------------
+
+    void ResetModelRotation(float speed = 10f)
+    {
+        if (!playerModel) return;
+
+        playerModel.rotation = Quaternion.Slerp(
+            playerModel.rotation,
+            transform.rotation,
+            Time.deltaTime * speed
+        );
+    }
+
+    void ApplyExtraGravity()
+    {
+        if (!isGrounded && rb.linearVelocity.y < 0 && !isWallSliding)
+        {
+            rb.AddForce(
+                Vector3.down * (gravityMultiplier - 1f) * Physics.gravity.magnitude,
+                ForceMode.Acceleration
+            );
+        }
+    }
+
+    void ApplyDamping()
+    {
+        rb.linearDamping = isGrounded ? groundDrag : airDrag;
+    }
+
+    void CheckGround()
+    {
+        float dist = (normalHeight * 0.5f) + groundDistance;
+        isGrounded = Physics.Raycast(transform.position, Vector3.down, dist, groundMask);
+
+        if (isGrounded)
+            isWallSliding = false;
+    }
+
+    // -------------------- Input --------------------
+
+    void HandleInput()
+    {
+        float h = Input.GetAxisRaw("Horizontal");
+        float v = Input.GetAxisRaw("Vertical");
+        moveInput = (transform.right * h + transform.forward * v).normalized;
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            if (isWallSliding)
+                WallJump();
+            else if (isGrounded || coyoteCounter > 0f)
+                Jump();
+        }
+
+        if (Input.GetKeyDown(KeyCode.LeftShift))
+        {
+            float speed = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z).magnitude;
+            if (isGrounded && speed >= slideMinSpeed)
+                StartSlide();
+        }
+
+        if (Input.GetKeyUp(KeyCode.LeftShift))
+            StopSlide();
+    }
+
+    // -------------------- Movement --------------------
+
+    void MovePlayer()
+    {
+        if (isSliding || isWallSliding) return;
+
+        Vector3 target = moveInput * moveSpeed;
+        Vector3 current = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+
+        float control = isGrounded ? 1f : airControl;
+        Vector3 change = (target - current) * control;
+        change = Vector3.ClampMagnitude(change, acceleration * Time.fixedDeltaTime);
+
+        rb.AddForce(change, ForceMode.VelocityChange);
+    }
+
+    // -------------------- Slide --------------------
+
+    void HandleSlide()
+    {
+        if (!isSliding) return;
+
+        rb.linearVelocity = new Vector3(
+            rb.linearVelocity.x * (1 - slideFriction * Time.deltaTime),
+            rb.linearVelocity.y,
+            rb.linearVelocity.z * (1 - slideFriction * Time.deltaTime)
+        );
+
+        if (!isGrounded ||
+            new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z).magnitude < slideMinSpeed * 0.5f)
+        {
+            StopSlide();
+        }
+
+        if (playerModel)
+        {
+            Vector3 axis = Vector3.Cross(slideDirection, Vector3.up);
+            playerModel.rotation = Quaternion.Slerp(
+                playerModel.rotation,
+                Quaternion.AngleAxis(slideTiltAngle, axis) * transform.rotation,
+                Time.deltaTime * 10f
+            );
+        }
+    }
+
+    // -------------------- Wall Slide --------------------
+
+    void HandleWallSlidePhysics()
+    {
+        if (!isWallSliding) return;
+
+        if (rb.linearVelocity.y < 0)
+        {
+            rb.linearVelocity = new Vector3(
+                rb.linearVelocity.x,
+                Mathf.Max(rb.linearVelocity.y, -wallSlideSpeed),
+                rb.linearVelocity.z
+            );
+        }
+
+        if (enableWallSlideTilt && playerModel)
+        {
+            Vector3 axis = Vector3.Cross(-wallNormal, Vector3.up);
+            Quaternion tilt =
+                Quaternion.AngleAxis(wallSlideTiltAngle, axis) * transform.rotation;
+
+            playerModel.rotation = Quaternion.Slerp(
+                playerModel.rotation,
+                tilt,
+                Time.deltaTime * 8f
+            );
+        }
+    }
+
+    void OnCollisionStay(Collision c)
+    {
+        if (isGrounded) return;
+        if (((1 << c.gameObject.layer) & groundMask) == 0) return;
+
+        foreach (var contact in c.contacts)
+        {
+            float angle = Vector3.Angle(contact.normal, Vector3.up);
+            if (angle > 70f && angle < 110f)
+            {
+                isWallSliding = true;
+                wallNormal = contact.normal;
+                return;
+            }
+        }
+
+        isWallSliding = false;
+    }
+
+    void OnCollisionExit(Collision c)
+    {
+        if (((1 << c.gameObject.layer) & groundMask) != 0)
+            isWallSliding = false;
+    }
+
+    // -------------------- Actions --------------------
+
+    void StartSlide()
+    {
+        isSliding = true;
+
+        Vector3 horiz = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        slideDirection = horiz.normalized;
+
+        rb.AddForce(slideDirection * slideBoost, ForceMode.VelocityChange);
+
+        if (capsuleCollider)
+        {
+            capsuleCollider.height = slideHeight;
+            transform.position += Vector3.down * ((normalHeight - slideHeight) * 0.5f);
+        }
+    }
+
+    void StopSlide()
+    {
+        if (!isSliding) return;
+
+        if (CanStandUp())
+        {
+            isSliding = false;
+
+            if (capsuleCollider)
+            {
+                transform.position += Vector3.up * ((normalHeight - slideHeight) * 0.5f);
+                capsuleCollider.height = normalHeight;
+            }
+        }
+    }
+
+    bool CanStandUp()
+    {
+        float dist = normalHeight - slideHeight + 0.1f;
+        return !Physics.Raycast(transform.position, Vector3.up, dist, groundMask);
+    }
+
+    void Jump()
+    {
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+    }
+
+    void WallJump()
+    {
+        Vector3 dir = (wallNormal + Vector3.up).normalized;
+
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        rb.AddForce(dir * wallJumpForce, ForceMode.Impulse);
+
+        isWallSliding = false;
+        wallJumpTimer = wallJumpDuration;
+    }
+
+    void ClampSpeed()
+    {
+        if (isSliding) return;
+
+        Vector3 horiz = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        if (horiz.magnitude > maxSpeed)
+        {
+            Vector3 clamped = horiz.normalized * maxSpeed;
+            rb.linearVelocity = new Vector3(clamped.x, rb.linearVelocity.y, clamped.z);
+        }
+    }
+
+    void CreateFrictionlessMaterial()
+    {
+        if (!capsuleCollider) return;
+
+        PhysicsMaterial mat = new PhysicsMaterial("PlayerFrictionless")
+        {
+            dynamicFriction = 0f,
+            staticFriction = 0f,
+            bounciness = 0f,
+            frictionCombine = PhysicsMaterialCombine.Minimum
+        };
+
+        capsuleCollider.material = mat;
+    }
+}
