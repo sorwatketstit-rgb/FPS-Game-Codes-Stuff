@@ -18,14 +18,18 @@ public class MomentumMovement : MonoBehaviour
     [Header("Slide Settings")]
     [Range(1f, 20f)] public float slideMinSpeed = 5f;
     [Range(0f, 75f)] public float slideBoost = 30f;
-    [Range(0f, 1f)] public float slideFriction = 0.1f;
-    [Range(0.1f, 1f)] public float slideHeight = 0.5f;
-    [Range(0f, 45f)] public float slideTiltAngle = 15f;
+    [Range(0f, 5f)] public float slideDrag = 2f;
+    [Range(0.4f, 1f)] public float slideHeightMultiplier = 0.6f;
+    [Range(0f, 60f)] public float slideTiltAngle = 25f;
+
+    [Header("Slide Tilt Tuning")]
+    [Range(1f, 20f)] public float slideTiltSpeed = 12f;
+    [Range(0f, 1f)] public float slideTiltStrength = 1f;
 
     [Header("Wall Slide Settings")]
     [Range(1f, 20f)] public float wallSlideSpeed = 2f;
     [Range(1f, 20f)] public float wallJumpForce = 15f;
-    [Range(0f, 2f)] public float wallJumpDuration = 0.2f;
+    [Range(0f, 0.5f)] public float wallJumpDuration = 0.2f;
 
     [Header("Wall Slide Tilt")]
     public bool enableWallSlideTilt = true;
@@ -49,7 +53,7 @@ public class MomentumMovement : MonoBehaviour
     public float maxFootstepRate = 6f;
 
     Rigidbody rb;
-    CapsuleCollider capsuleCollider;
+    CapsuleCollider capsule;
 
     Vector3 moveInput;
     Vector3 wallNormal;
@@ -60,33 +64,44 @@ public class MomentumMovement : MonoBehaviour
     bool isWallSliding;
 
     float normalHeight;
-    float wallJumpTimer;
-    float footstepTimer;
+    float slideHeight;
+    Vector3 normalCenter;
+    Vector3 slideCenter;
 
     float coyoteTime = 0.1f;
     float coyoteCounter;
+    float wallJumpTimer;
+    float footstepTimer;
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-        capsuleCollider = GetComponentInChildren<CapsuleCollider>();
+        capsule = GetComponentInChildren<CapsuleCollider>();
 
         rb.freezeRotation = true;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
 
         CreateFrictionlessMaterial();
-        normalHeight = capsuleCollider ? capsuleCollider.height : 2f;
+
+        normalHeight = capsule.height;
+        slideHeight = normalHeight * slideHeightMultiplier;
+
+        normalCenter = capsule.center;
+        slideCenter = new Vector3(
+            normalCenter.x,
+            slideHeight * 0.5f,
+            normalCenter.z
+        );
     }
 
     void Update()
     {
         CheckGround();
         HandleInput();
-        HandleSlide();
         HandleFootsteps();
 
-        if (!isWallSliding && !isSliding)
-            ResetModelRotation();
+        if (isSliding)
+            HandleSlideTilt();
 
         if (isGrounded)
             coyoteCounter = coyoteTime;
@@ -95,6 +110,9 @@ public class MomentumMovement : MonoBehaviour
 
         if (wallJumpTimer > 0f)
             wallJumpTimer -= Time.deltaTime;
+
+        if (!isSliding && !isWallSliding)
+            ResetModelRotation();
     }
 
     void FixedUpdate()
@@ -104,7 +122,7 @@ public class MomentumMovement : MonoBehaviour
 
         HandleWallSlidePhysics();
         ApplyExtraGravity();
-        ApplyDamping();
+        ApplyDrag();
         ClampSpeed();
     }
 
@@ -137,42 +155,28 @@ public class MomentumMovement : MonoBehaviour
         }
     }
 
-    // -------------------- Helpers --------------------
+    // -------------------- Slide Tilt (FIXED) --------------------
 
-    void ResetModelRotation(float speed = 10f)
+    void HandleSlideTilt()
     {
         if (!playerModel) return;
 
+        Vector3 horiz = HorizontalVelocity();
+        if (horiz.sqrMagnitude < 0.1f) return;
+
+        float speed01 = Mathf.Clamp01(horiz.magnitude / maxSpeed);
+        float tilt = slideTiltAngle * speed01 * slideTiltStrength;
+
+        Vector3 axis = Vector3.Cross(horiz.normalized, Vector3.up);
+
+        Quaternion target =
+            Quaternion.AngleAxis(tilt, axis) * transform.rotation;
+
         playerModel.rotation = Quaternion.Slerp(
             playerModel.rotation,
-            transform.rotation,
-            Time.deltaTime * speed
+            target,
+            Time.deltaTime * slideTiltSpeed
         );
-    }
-
-    void ApplyExtraGravity()
-    {
-        if (!isGrounded && rb.linearVelocity.y < 0 && !isWallSliding)
-        {
-            rb.AddForce(
-                Vector3.down * (gravityMultiplier - 1f) * Physics.gravity.magnitude,
-                ForceMode.Acceleration
-            );
-        }
-    }
-
-    void ApplyDamping()
-    {
-        rb.linearDamping = isGrounded ? groundDrag : airDrag;
-    }
-
-    void CheckGround()
-    {
-        float dist = (normalHeight * 0.5f) + groundDistance;
-        isGrounded = Physics.Raycast(transform.position, Vector3.down, dist, groundMask);
-
-        if (isGrounded)
-            isWallSliding = false;
     }
 
     // -------------------- Input --------------------
@@ -193,7 +197,7 @@ public class MomentumMovement : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.LeftShift))
         {
-            float speed = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z).magnitude;
+            float speed = HorizontalVelocity().magnitude;
             if (isGrounded && speed >= slideMinSpeed)
                 StartSlide();
         }
@@ -209,7 +213,7 @@ public class MomentumMovement : MonoBehaviour
         if (isSliding || isWallSliding) return;
 
         Vector3 target = moveInput * moveSpeed;
-        Vector3 current = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        Vector3 current = HorizontalVelocity();
 
         float control = isGrounded ? 1f : airControl;
         Vector3 change = (target - current) * control;
@@ -220,31 +224,41 @@ public class MomentumMovement : MonoBehaviour
 
     // -------------------- Slide --------------------
 
-    void HandleSlide()
+    void StartSlide()
+    {
+        if (isSliding) return;
+
+        isSliding = true;
+
+        slideDirection = HorizontalVelocity().normalized;
+        rb.AddForce(slideDirection * slideBoost, ForceMode.VelocityChange);
+
+        capsule.height = slideHeight;
+        capsule.center = slideCenter;
+    }
+
+    void StopSlide()
     {
         if (!isSliding) return;
+        if (!CanStandUp()) return;
 
-        rb.linearVelocity = new Vector3(
-            rb.linearVelocity.x * (1 - slideFriction * Time.deltaTime),
-            rb.linearVelocity.y,
-            rb.linearVelocity.z * (1 - slideFriction * Time.deltaTime)
+        isSliding = false;
+
+        capsule.height = normalHeight;
+        capsule.center = normalCenter;
+    }
+
+    bool CanStandUp()
+    {
+        float castDist = normalHeight - slideHeight + 0.1f;
+        return !Physics.SphereCast(
+            transform.position,
+            capsule.radius * 0.95f,
+            Vector3.up,
+            out _,
+            castDist,
+            groundMask
         );
-
-        if (!isGrounded ||
-            new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z).magnitude < slideMinSpeed * 0.5f)
-        {
-            StopSlide();
-        }
-
-        if (playerModel)
-        {
-            Vector3 axis = Vector3.Cross(slideDirection, Vector3.up);
-            playerModel.rotation = Quaternion.Slerp(
-                playerModel.rotation,
-                Quaternion.AngleAxis(slideTiltAngle, axis) * transform.rotation,
-                Time.deltaTime * 10f
-            );
-        }
     }
 
     // -------------------- Wall Slide --------------------
@@ -265,12 +279,9 @@ public class MomentumMovement : MonoBehaviour
         if (enableWallSlideTilt && playerModel)
         {
             Vector3 axis = Vector3.Cross(-wallNormal, Vector3.up);
-            Quaternion tilt =
-                Quaternion.AngleAxis(wallSlideTiltAngle, axis) * transform.rotation;
-
             playerModel.rotation = Quaternion.Slerp(
                 playerModel.rotation,
-                tilt,
+                Quaternion.AngleAxis(wallSlideTiltAngle, axis) * transform.rotation,
                 Time.deltaTime * 8f
             );
         }
@@ -303,44 +314,6 @@ public class MomentumMovement : MonoBehaviour
 
     // -------------------- Actions --------------------
 
-    void StartSlide()
-    {
-        isSliding = true;
-
-        Vector3 horiz = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
-        slideDirection = horiz.normalized;
-
-        rb.AddForce(slideDirection * slideBoost, ForceMode.VelocityChange);
-
-        if (capsuleCollider)
-        {
-            capsuleCollider.height = slideHeight;
-            transform.position += Vector3.down * ((normalHeight - slideHeight) * 0.5f);
-        }
-    }
-
-    void StopSlide()
-    {
-        if (!isSliding) return;
-
-        if (CanStandUp())
-        {
-            isSliding = false;
-
-            if (capsuleCollider)
-            {
-                transform.position += Vector3.up * ((normalHeight - slideHeight) * 0.5f);
-                capsuleCollider.height = normalHeight;
-            }
-        }
-    }
-
-    bool CanStandUp()
-    {
-        float dist = normalHeight - slideHeight + 0.1f;
-        return !Physics.Raycast(transform.position, Vector3.up, dist, groundMask);
-    }
-
     void Jump()
     {
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
@@ -350,7 +323,6 @@ public class MomentumMovement : MonoBehaviour
     void WallJump()
     {
         Vector3 dir = (wallNormal + Vector3.up).normalized;
-
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         rb.AddForce(dir * wallJumpForce, ForceMode.Impulse);
 
@@ -358,11 +330,39 @@ public class MomentumMovement : MonoBehaviour
         wallJumpTimer = wallJumpDuration;
     }
 
+    // -------------------- Helpers --------------------
+
+    void CheckGround()
+    {
+        float dist = (capsule.height * 0.5f) + groundDistance;
+        isGrounded = Physics.Raycast(transform.position, Vector3.down, dist, groundMask);
+        if (isGrounded) isWallSliding = false;
+    }
+
+    void ApplyExtraGravity()
+    {
+        if (!isGrounded && rb.linearVelocity.y < 0 && !isWallSliding)
+        {
+            rb.AddForce(
+                Vector3.down * (gravityMultiplier - 1f) * Physics.gravity.magnitude,
+                ForceMode.Acceleration
+            );
+        }
+    }
+
+    void ApplyDrag()
+    {
+        if (isSliding)
+            rb.linearDamping = slideDrag;
+        else
+            rb.linearDamping = isGrounded ? groundDrag : airDrag;
+    }
+
     void ClampSpeed()
     {
         if (isSliding) return;
 
-        Vector3 horiz = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+        Vector3 horiz = HorizontalVelocity();
         if (horiz.magnitude > maxSpeed)
         {
             Vector3 clamped = horiz.normalized * maxSpeed;
@@ -370,10 +370,24 @@ public class MomentumMovement : MonoBehaviour
         }
     }
 
+    Vector3 HorizontalVelocity()
+    {
+        return new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+    }
+
+    void ResetModelRotation(float speed = 10f)
+    {
+        if (!playerModel) return;
+
+        playerModel.rotation = Quaternion.Slerp(
+            playerModel.rotation,
+            transform.rotation,
+            Time.deltaTime * speed
+        );
+    }
+
     void CreateFrictionlessMaterial()
     {
-        if (!capsuleCollider) return;
-
         PhysicsMaterial mat = new PhysicsMaterial("PlayerFrictionless")
         {
             dynamicFriction = 0f,
@@ -382,6 +396,6 @@ public class MomentumMovement : MonoBehaviour
             frictionCombine = PhysicsMaterialCombine.Minimum
         };
 
-        capsuleCollider.material = mat;
+        capsule.material = mat;
     }
 }
