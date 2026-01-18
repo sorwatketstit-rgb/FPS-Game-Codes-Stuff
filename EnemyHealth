@@ -1,0 +1,91 @@
+using UnityEngine;
+
+public class EnemyHealth : MonoBehaviour
+{
+    [Header("Health Settings")]
+    [Tooltip("Number of hits before enemy dies")]
+    [Range(1, 20)]
+    public int maxHits = 3;
+
+    [Tooltip("Show hit counter in console")]
+    public bool showDebugInfo = true;
+
+    [Header("Death Settings")]
+    [Tooltip("Delay before destroying object (for death effects)")]
+    [Range(0f, 2f)]
+    public float deathDelay = 0f;
+
+    [Tooltip("Optional: Effect to spawn on death")]
+    public GameObject deathEffect;
+
+    // Current hit counter
+    private int currentHits = 0;
+
+    void Start()
+    {
+        // Validate setup
+        if (gameObject.layer != LayerMask.NameToLayer("Enemy"))
+        {
+            Debug.LogWarning($"{gameObject.name} is not on 'Enemy' layer! It won't be detected by shooting system.");
+        }
+    }
+
+    public void TakeDamage()
+    {
+        // Increase hit counter
+        currentHits++;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"{gameObject.name} hit! ({currentHits}/{maxHits})");
+        }
+
+        // Check if dead
+        if (currentHits >= maxHits)
+        {
+            Die();
+        }
+        else
+        {
+            // Optional: Add hit reaction here (flash color, play sound, etc.)
+            OnHit();
+        }
+    }
+
+    void OnHit()
+    {
+        // Called when hit but not dead yet
+        // You can add visual/audio feedback here later
+        // Example: Flash red, play hurt sound, etc.
+    }
+
+    void Die()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log($"{gameObject.name} DIED!");
+        }
+
+        // Spawn death effect if assigned
+        if (deathEffect != null)
+        {
+            Instantiate(deathEffect, transform.position, Quaternion.identity);
+        }
+
+        // Destroy enemy
+        if (deathDelay > 0f)
+        {
+            Destroy(gameObject, deathDelay);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    // Public getters for other scripts
+    public int GetCurrentHits() => currentHits;
+    public int GetMaxHits() => maxHits;
+    public float GetHealthPercentage() => 1f - ((float)currentHits / maxHits);
+    public bool IsDead() => currentHits >= maxHits;
+}
