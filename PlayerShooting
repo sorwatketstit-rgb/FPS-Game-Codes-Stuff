@@ -1,0 +1,259 @@
+using UnityEngine;
+
+public class PlayerShooting : MonoBehaviour
+{
+    [Header("Shooting Settings")]
+    [Tooltip("Camera to shoot from (usually Main Camera)")]
+    public Camera playerCamera;
+
+    [Tooltip("Maximum distance the bullet can travel")]
+    [Range(0f, 1000f)]
+    public float shootRange = 100f;
+
+    [Tooltip("Time between shots (lower = faster fire rate)")]
+    [Range(0.001f, 3f)]
+    public float fireRate = 0.5f;
+
+    [Tooltip("Layer mask for what can be hit")]
+    public LayerMask hitLayers;
+
+    [Header("Zoom Settings")]
+    [Tooltip("Enable right-click to zoom")]
+    public bool enableZoom = true;
+
+    [Tooltip("Field of view when zoomed in")]
+    [Range(10f, 60f)]
+    public float zoomFOV = 30f;
+
+    [Tooltip("Zoom speed (higher = faster)")]
+    [Range(1f, 20f)]
+    public float zoomSpeed = 10f;
+
+    [Header("Visual Effects")]
+    [Tooltip("Muzzle flash object (will enable/disable when shooting)")]
+    public GameObject muzzleFlash;
+
+    [Tooltip("Duration to show muzzle flash")]
+    [Range(0.05f, 0.3f)]
+    public float muzzleFlashDuration = 0.1f;
+
+    [Tooltip("Gun object to shake for recoil")]
+    public Transform gunTransform;
+
+    [Tooltip("How much the gun kicks back")]
+    [Range(0f, 0.5f)]
+    public float recoilAmount = 0.1f;
+
+    [Tooltip("How fast gun returns to normal")]
+    [Range(1f, 20f)]
+    public float recoilRecoverySpeed = 10f;
+
+    [Header("Sound Effects")]
+    [Tooltip("Audio source for gunshot sound")]
+    public AudioSource gunAudio;
+
+    [Tooltip("Gunshot sound clip (optional, can be set in AudioSource)")]
+    public AudioClip gunshotClip;
+
+    [Header("Debug")]
+    [Tooltip("Show debug line when shooting")]
+    public bool showDebugRay = true;
+
+    [Tooltip("Duration to show debug ray")]
+    [Range(0.1f, 2f)]
+    public float debugRayDuration = 0.5f;
+
+    // Private variables
+    private float nextFireTime = 0f;
+    private float normalFOV;
+    private bool isZoomed = false;
+    private float muzzleFlashTimer = 0f;
+    private Vector3 gunOriginalPosition;
+    private Vector3 gunCurrentRecoil;
+
+    void Start()
+    {
+        // Auto-find camera if not assigned
+        if (playerCamera == null)
+        {
+            playerCamera = Camera.main;
+            if (playerCamera == null)
+            {
+                Debug.LogError("No camera found! Assign a camera to PlayerShooting script.");
+                enabled = false;
+                return;
+            }
+        }
+
+        // Store normal FOV
+        normalFOV = playerCamera.fieldOfView;
+
+        // Store gun original position for recoil
+        if (gunTransform != null)
+        {
+            gunOriginalPosition = gunTransform.localPosition;
+            gunCurrentRecoil = Vector3.zero;
+        }
+
+        // Make sure muzzle flash starts disabled
+        if (muzzleFlash != null)
+        {
+            muzzleFlash.SetActive(false);
+        }
+
+        Debug.Log("Shooting System Ready! Left Click - Shoot | Right Click - Zoom");
+    }
+
+    void Update()
+    {
+        HandleShooting();
+        HandleZoom();
+        HandleMuzzleFlash();
+        HandleGunRecoil();
+    }
+
+    void HandleShooting()
+    {
+        // Check if player is holding left mouse button and can shoot
+        if (Input.GetButton("Fire1") && Time.time >= nextFireTime)
+        {
+            Shoot();
+            nextFireTime = Time.time + fireRate;
+        }
+    }
+
+    void Shoot()
+    {
+        // Create ray from camera center
+        Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        RaycastHit hit;
+
+        // Trigger visual effects
+        TriggerMuzzleFlash();
+        ApplyRecoil();
+        PlayGunSound();
+
+        // Perform raycast
+        if (Physics.Raycast(ray, out hit, shootRange, hitLayers))
+        {
+            // Hit something!
+            Debug.Log($"Hit: {hit.collider.gameObject.name} at distance {hit.distance}");
+
+            // Check if we hit an enemy
+            EnemyHealth enemy = hit.collider.GetComponent<EnemyHealth>();
+            if (enemy != null)
+            {
+                enemy.TakeDamage();
+                Debug.Log($"Damaged enemy: {enemy.gameObject.name}");
+            }
+
+            // Visual debug
+            if (showDebugRay)
+            {
+                Debug.DrawLine(ray.origin, hit.point, Color.red, debugRayDuration);
+            }
+        }
+        else
+        {
+            // Missed - ray didn't hit anything
+            if (showDebugRay)
+            {
+                Debug.DrawRay(ray.origin, ray.direction * shootRange, Color.yellow, debugRayDuration);
+            }
+        }
+    }
+
+    void HandleZoom()
+    {
+        if (!enableZoom) return;
+
+        // Toggle zoom with right mouse button
+        if (Input.GetButtonDown("Fire2")) // Right click
+        {
+            isZoomed = true;
+        }
+
+        if (Input.GetButtonUp("Fire2"))
+        {
+            isZoomed = false;
+        }
+
+        // Smoothly interpolate FOV
+        float targetFOV = isZoomed ? zoomFOV : normalFOV;
+        playerCamera.fieldOfView = Mathf.Lerp(
+            playerCamera.fieldOfView,
+            targetFOV,
+            Time.deltaTime * zoomSpeed
+        );
+    }
+
+    void TriggerMuzzleFlash()
+    {
+        if (muzzleFlash != null)
+        {
+            muzzleFlash.SetActive(true);
+            muzzleFlashTimer = muzzleFlashDuration;
+        }
+    }
+
+    void HandleMuzzleFlash()
+    {
+        if (muzzleFlashTimer > 0f)
+        {
+            muzzleFlashTimer -= Time.deltaTime;
+
+            // Disable muzzle flash when timer runs out
+            if (muzzleFlashTimer <= 0f && muzzleFlash != null)
+            {
+                muzzleFlash.SetActive(false);
+            }
+        }
+    }
+
+    void ApplyRecoil()
+    {
+        if (gunTransform != null)
+        {
+            // Add random recoil kick
+            gunCurrentRecoil += new Vector3(
+                Random.Range(-recoilAmount, recoilAmount) * 0.5f,  // Slight horizontal shake
+                Random.Range(-recoilAmount, recoilAmount) * 0.3f,  // Slight vertical shake
+                -recoilAmount  // Kick backward
+            );
+        }
+    }
+
+    void HandleGunRecoil()
+    {
+        if (gunTransform != null)
+        {
+            // Smoothly return gun to original position
+            gunCurrentRecoil = Vector3.Lerp(gunCurrentRecoil, Vector3.zero, Time.deltaTime * recoilRecoverySpeed);
+            gunTransform.localPosition = gunOriginalPosition + gunCurrentRecoil;
+        }
+    }
+
+    void PlayGunSound()
+    {
+        if (gunAudio == null) return;
+
+        // Play gunshot sound
+        if (gunshotClip != null)
+        {
+            gunAudio.PlayOneShot(gunshotClip);
+        }
+        else if (!gunAudio.isPlaying)
+        {
+            // If no clip assigned, play whatever is in the AudioSource
+            gunAudio.Play();
+        }
+    }
+
+    // Public methods for external use
+    public bool IsZoomed() => isZoomed;
+
+    public void SetFireRate(float rate)
+    {
+        fireRate = Mathf.Clamp(rate, 0.001f, 3f);
+    }
+}
