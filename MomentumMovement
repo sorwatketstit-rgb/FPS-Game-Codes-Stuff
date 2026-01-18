@@ -42,6 +42,12 @@ public class MomentumMovement : MonoBehaviour
     [Header("References")]
     public Transform playerModel;
 
+    [Header("Footstep Audio")]
+    public AudioSource footstepSource;
+    public AudioClip[] footstepClips;
+    public float footstepMinSpeed = 1.5f;
+    public float maxFootstepRate = 6f;
+
     Rigidbody rb;
     CapsuleCollider capsuleCollider;
 
@@ -55,6 +61,7 @@ public class MomentumMovement : MonoBehaviour
 
     float normalHeight;
     float wallJumpTimer;
+    float footstepTimer;
 
     float coyoteTime = 0.1f;
     float coyoteCounter;
@@ -76,6 +83,7 @@ public class MomentumMovement : MonoBehaviour
         CheckGround();
         HandleInput();
         HandleSlide();
+        HandleFootsteps();
 
         if (!isWallSliding && !isSliding)
             ResetModelRotation();
@@ -98,6 +106,35 @@ public class MomentumMovement : MonoBehaviour
         ApplyExtraGravity();
         ApplyDamping();
         ClampSpeed();
+    }
+
+    // -------------------- Footsteps --------------------
+
+    void HandleFootsteps()
+    {
+        if (!isGrounded) return;
+        if (isSliding || isWallSliding) return;
+        if (!footstepSource || footstepClips.Length == 0) return;
+
+        Vector3 horiz = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+        float speed = horiz.magnitude;
+
+        if (speed < footstepMinSpeed) return;
+
+        float speed01 = Mathf.Clamp01(speed / maxSpeed);
+        float stepRate = Mathf.Lerp(2f, maxFootstepRate, speed01);
+        float interval = 1f / stepRate;
+
+        footstepTimer += Time.deltaTime;
+
+        if (footstepTimer >= interval)
+        {
+            footstepTimer = 0f;
+            footstepSource.pitch = Random.Range(0.95f, 1.05f);
+            footstepSource.PlayOneShot(
+                footstepClips[Random.Range(0, footstepClips.Length)]
+            );
+        }
     }
 
     // -------------------- Helpers --------------------
