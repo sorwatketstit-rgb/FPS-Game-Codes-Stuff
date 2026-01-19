@@ -9,6 +9,9 @@ public class ModernFPSCamera : MonoBehaviour
     [Tooltip("Camera holder - create empty GameObject as child of player")]
     public Transform cameraHolder;
 
+    [Tooltip("Visual model to bob when moving (assign in Inspector)")]
+    public Transform playerModel;
+
     [Header("Mouse Settings")]
     [Range(1f, 1000f)]
     public float mouseSensitivity = 400f;
@@ -24,16 +27,18 @@ public class ModernFPSCamera : MonoBehaviour
     [Tooltip("Camera offset from player center (height mostly)")]
     public Vector3 cameraOffset = new Vector3(0f, 0.6f, 0f);
 
-    [Header("Camera Bobbing")]
-    public float bobFrequency = 8f;
-    public float bobHorizontalAmplitude = 0.05f;
-    public float bobVerticalAmplitude = 0.05f;
+    [Header("Model Bobbing")]
+    public float modelBobFrequency = 6f;
+    public float modelBobVerticalAmplitude = 0.08f;
+    public float modelBobSmooth = 10f;
+    public float groundCheckDistance = 1.2f;
+    public LayerMask groundLayer;
 
     private float xRotation = 0f;
     private float yRotation = 0f;
 
-    private float bobTimer = 0f;
-    private Vector3 bobOffset = Vector3.zero;
+    private float modelBobTimer = 0f;
+    private Vector3 modelStartLocalPos;
 
     private Rigidbody playerRb;
 
@@ -56,6 +61,11 @@ public class ModernFPSCamera : MonoBehaviour
 
         playerRb = player.GetComponent<Rigidbody>();
 
+        if (playerModel != null)
+        {
+            modelStartLocalPos = playerModel.localPosition;
+        }
+
         yRotation = player.eulerAngles.y;
 
         Debug.Log("FPS Camera Ready! Press ESC to unlock cursor.");
@@ -76,7 +86,7 @@ public class ModernFPSCamera : MonoBehaviour
 
     void LateUpdate()
     {
-        UpdateCameraPosition();
+        HandleModelBobbing();
     }
 
     void HandleMouseLook()
@@ -95,44 +105,56 @@ public class ModernFPSCamera : MonoBehaviour
         player.rotation = Quaternion.Euler(0f, yRotation, 0f);
     }
 
-    void UpdateCameraPosition()
+    void HandleModelBobbing()
     {
-        HandleCameraBobbing();
-
-        cameraHolder.position = player.position + cameraOffset + bobOffset;
-    }
-
-    void HandleCameraBobbing()
-    {
-        if (playerRb == null)
-        {
-            bobOffset = Vector3.zero;
+        if (playerModel == null || playerRb == null)
             return;
-        }
 
-        Vector3 horizontalVelocity = new Vector3(playerRb.linearVelocity.x, 0f, playerRb.linearVelocity.z);
+        bool grounded = Physics.Raycast(
+            player.position,
+            Vector3.down,
+            groundCheckDistance,
+            groundLayer
+        );
+
+        Vector3 horizontalVelocity = new Vector3(
+            playerRb.linearVelocity.x,
+            0f,
+            playerRb.linearVelocity.z
+        );
+
         float speed = horizontalVelocity.magnitude;
 
-        if (speed > 0.1f)
+        if (grounded && speed > 0.1f)
         {
-            bobTimer += Time.deltaTime * bobFrequency;
+            modelBobTimer += Time.deltaTime * modelBobFrequency * speed * 0.1f;
 
-            float horizontalBob = Mathf.Sin(bobTimer) * bobHorizontalAmplitude;
-            float verticalBob = Mathf.Abs(Mathf.Cos(bobTimer)) * bobVerticalAmplitude;
+            float verticalBob = Mathf.Sin(modelBobTimer) * modelBobVerticalAmplitude;
 
-            bobOffset = new Vector3(horizontalBob, verticalBob, 0f);
+            Vector3 targetPos = modelStartLocalPos + new Vector3(0f, verticalBob, 0f);
+            playerModel.localPosition = Vector3.Lerp(
+                playerModel.localPosition,
+                targetPos,
+                Time.deltaTime * modelBobSmooth
+            );
         }
         else
         {
-            bobTimer = 0f;
-            bobOffset = Vector3.Lerp(bobOffset, Vector3.zero, Time.deltaTime * 10f);
+            modelBobTimer = 0f;
+            playerModel.localPosition = Vector3.Lerp(
+                playerModel.localPosition,
+                modelStartLocalPos,
+                Time.deltaTime * modelBobSmooth
+            );
         }
     }
 
     void ToggleCursor()
     {
-        Cursor.lockState = Cursor.lockState == CursorLockMode.Locked ?
-            CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.lockState = Cursor.lockState == CursorLockMode.Locked
+            ? CursorLockMode.None
+            : CursorLockMode.Locked;
+
         Cursor.visible = !Cursor.visible;
     }
 
