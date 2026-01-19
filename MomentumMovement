@@ -10,13 +10,13 @@ public class MomentumMovement : MonoBehaviour
     [Range(0f, 1f)] public float airControl = 0.5f;
 
     [Header("Gravity Settings")]
-    [Range(1f, 5f)] public float gravityMultiplier = 2.5f;
+    [Range(1f, 25f)] public float gravityMultiplier = 2.5f;
 
     [Header("Jump Settings")]
     [Range(1f, 20f)] public float jumpForce = 12f;
 
     [Header("Slide Settings")]
-    [Range(1f, 20f)] public float slideMinSpeed = 5f;
+    [Range(1f, 20f)] private float slideMinSpeed = 5f;
     [Range(0f, 75f)] public float slideBoost = 30f;
     [Range(0f, 5f)] public float slideDrag = 2f;
     [Range(0.4f, 1f)] public float slideHeightMultiplier = 0.6f;
@@ -27,8 +27,8 @@ public class MomentumMovement : MonoBehaviour
     [Range(0f, 1f)] public float slideTiltStrength = 1f;
 
     [Header("Wall Slide Settings")]
-    [Range(1f, 20f)] public float wallSlideSpeed = 2f;
-    [Range(1f, 20f)] public float wallJumpForce = 15f;
+    [Range(1f, 100f)] public float wallSlideSpeed = 2f;
+    [Range(1f, 50f)] public float wallJumpForce = 15f;
     [Range(0f, 0.5f)] public float wallJumpDuration = 0.2f;
 
     [Header("Wall Slide Tilt")]
@@ -36,8 +36,8 @@ public class MomentumMovement : MonoBehaviour
     [Range(0f, 45f)] public float wallSlideTiltAngle = 15f;
 
     [Header("Drag Settings")]
-    [Range(0f, 10f)] public float groundDrag = 5f;
-    [Range(0f, 10f)] public float airDrag = 0.5f;
+    [Range(0f, 20f)] public float groundDrag = 5f;
+    [Range(0f, 20f)] public float airDrag = 0.5f;
 
     [Header("Ground Check")]
     public LayerMask groundMask;
