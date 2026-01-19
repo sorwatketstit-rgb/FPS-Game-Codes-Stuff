@@ -24,16 +24,24 @@ public class ModernFPSCamera : MonoBehaviour
     [Tooltip("Camera offset from player center (height mostly)")]
     public Vector3 cameraOffset = new Vector3(0f, 0.6f, 0f);
 
+    [Header("Camera Bobbing")]
+    public float bobFrequency = 8f;
+    public float bobHorizontalAmplitude = 0.05f;
+    public float bobVerticalAmplitude = 0.05f;
+
     private float xRotation = 0f;
     private float yRotation = 0f;
 
+    private float bobTimer = 0f;
+    private Vector3 bobOffset = Vector3.zero;
+
+    private Rigidbody playerRb;
+
     void Start()
     {
-        // Lock cursor
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        // Validation
         if (player == null)
         {
             Debug.LogError("Player reference not assigned!");
@@ -41,13 +49,13 @@ public class ModernFPSCamera : MonoBehaviour
             return;
         }
 
-        // Initialize camera position
         if (cameraHolder == null)
         {
             cameraHolder = transform;
         }
 
-        // Set initial rotations
+        playerRb = player.GetComponent<Rigidbody>();
+
         yRotation = player.eulerAngles.y;
 
         Debug.Log("FPS Camera Ready! Press ESC to unlock cursor.");
@@ -55,7 +63,6 @@ public class ModernFPSCamera : MonoBehaviour
 
     void Update()
     {
-        // Cursor toggle
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             ToggleCursor();
@@ -69,35 +76,57 @@ public class ModernFPSCamera : MonoBehaviour
 
     void LateUpdate()
     {
-        // Update camera position AFTER all physics (prevents jitter)
         UpdateCameraPosition();
     }
 
     void HandleMouseLook()
     {
-        // Get raw mouse delta (works with both old and new input system)
         float mouseX = Input.GetAxisRaw("Mouse X") * mouseSensitivity * Time.deltaTime;
         float mouseY = Input.GetAxisRaw("Mouse Y") * mouseSensitivity * Time.deltaTime;
 
         if (invertY) mouseY = -mouseY;
 
-        // Vertical rotation (camera only - looking up/down)
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -maxLookAngle, maxLookAngle);
 
-        // Horizontal rotation (player body - looking left/right)
         yRotation += mouseX;
 
-        // Apply rotations
         cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
         player.rotation = Quaternion.Euler(0f, yRotation, 0f);
     }
 
     void UpdateCameraPosition()
     {
-        // Keep camera at player position + offset
-        // LateUpdate ensures this happens AFTER physics
-        cameraHolder.position = player.position + cameraOffset;
+        HandleCameraBobbing();
+
+        cameraHolder.position = player.position + cameraOffset + bobOffset;
+    }
+
+    void HandleCameraBobbing()
+    {
+        if (playerRb == null)
+        {
+            bobOffset = Vector3.zero;
+            return;
+        }
+
+        Vector3 horizontalVelocity = new Vector3(playerRb.linearVelocity.x, 0f, playerRb.linearVelocity.z);
+        float speed = horizontalVelocity.magnitude;
+
+        if (speed > 0.1f)
+        {
+            bobTimer += Time.deltaTime * bobFrequency;
+
+            float horizontalBob = Mathf.Sin(bobTimer) * bobHorizontalAmplitude;
+            float verticalBob = Mathf.Abs(Mathf.Cos(bobTimer)) * bobVerticalAmplitude;
+
+            bobOffset = new Vector3(horizontalBob, verticalBob, 0f);
+        }
+        else
+        {
+            bobTimer = 0f;
+            bobOffset = Vector3.Lerp(bobOffset, Vector3.zero, Time.deltaTime * 10f);
+        }
     }
 
     void ToggleCursor()
