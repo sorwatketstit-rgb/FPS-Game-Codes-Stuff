@@ -1,0 +1,118 @@
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody))]
+public class EnemyProjectile : MonoBehaviour
+{
+    [Header("Movement")]
+    [Tooltip("How fast projectile moves")]
+    [Range(1f, 100f)]
+    public float speed = 20f;
+
+    [Header("Lifetime")]
+    [Tooltip("Auto-destroy after this many seconds")]
+    [Range(1f, 10f)]
+    public float lifetime = 5f;
+
+    [Tooltip("Max distance before destroying")]
+    [Range(10f, 200f)]
+    public float maxDistance = 100f;
+
+    [Header("Collision")]
+    [Tooltip("What layers the projectile can hit")]
+    public LayerMask hitLayers;
+
+    [Tooltip("Destroy projectile on any collision")]
+    public bool destroyOnHit = true;
+
+    [Header("Effects")]
+    [Tooltip("Optional: Effect to spawn on hit")]
+    public GameObject hitEffect;
+
+    [Header("Debug")]
+    public bool showDebugInfo = false;
+
+    // Private variables
+    private Vector3 startPosition;
+    private Rigidbody rb;
+
+    void Start()
+    {
+        rb = GetComponent<Rigidbody>();
+        startPosition = transform.position;
+
+        // Set rigidbody settings
+        rb.useGravity = false;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+
+        // Set initial velocity
+        rb.linearVelocity = transform.forward * speed;
+
+        // Auto-destroy after lifetime
+        Destroy(gameObject, lifetime);
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Projectile spawned at {transform.position}, moving at {speed} units/s");
+        }
+    }
+
+    void Update()
+    {
+        // Check if exceeded max distance
+        float distanceTraveled = Vector3.Distance(startPosition, transform.position);
+        if (distanceTraveled >= maxDistance)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log("Projectile exceeded max distance, destroying");
+            }
+            Destroy(gameObject);
+        }
+    }
+
+    void OnCollisionEnter(Collision collision)
+    {
+        // Check if we hit something on the allowed layers
+        if (((1 << collision.gameObject.layer) & hitLayers) != 0)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"Projectile hit: {collision.gameObject.name}");
+            }
+
+            // Check if we hit the player (for future damage system)
+            if (collision.gameObject.CompareTag("Player"))
+            {
+                if (showDebugInfo)
+                {
+                    Debug.Log("HIT PLAYER! (No damage system yet)");
+                }
+
+                // TODO: Call player damage function here later
+                // Example: collision.gameObject.GetComponent<PlayerHealth>()?.TakeDamage();
+            }
+
+            // Spawn hit effect if assigned
+            if (hitEffect != null)
+            {
+                Instantiate(hitEffect, transform.position, Quaternion.identity);
+            }
+
+            // Destroy projectile
+            if (destroyOnHit)
+            {
+                Destroy(gameObject);
+            }
+        }
+    }
+
+    // Optional: Draw debug line showing projectile path
+    void OnDrawGizmos()
+    {
+        if (showDebugInfo && Application.isPlaying)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(startPosition, transform.position);
+        }
+    }
+}
