@@ -1,0 +1,179 @@
+using UnityEngine;
+
+public class EnemyAI : MonoBehaviour
+{
+    [Header("Target")]
+    [Tooltip("The player to track (auto-finds if empty)")]
+    public Transform player;
+
+    [Header("Detection")]
+    [Tooltip("How far enemy can see the player")]
+    [Range(5f, 100f)]
+    public float detectionRange = 30f;
+
+    [Tooltip("Show detection range in editor")]
+    public bool showDetectionRange = true;
+
+    [Header("Rotation")]
+    [Tooltip("How fast enemy rotates to face player")]
+    [Range(1f, 10f)]
+    public float rotationSpeed = 3f;
+
+    [Tooltip("Allow enemy to look up/down at player")]
+    public bool allowVerticalAiming = true;
+
+    [Tooltip("If vertical aiming disabled, only rotate body on Y axis")]
+    public bool lockXZRotation = false;
+
+    [Header("Shooting")]
+    [Tooltip("Projectile prefab to spawn")]
+    public GameObject projectilePrefab;
+
+    [Tooltip("Where projectile spawns from")]
+    public Transform firePoint;
+
+    [Tooltip("Time between shots")]
+    [Range(0.1f, 10f)]
+    public float fireRate = 2f;
+
+    [Tooltip("Random variation in fire rate")]
+    [Range(0f, 2f)]
+    public float fireRateVariation = 0.5f;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    // Private variables
+    private float nextFireTime = 0f;
+    private bool canSeePlayer = false;
+
+    void Start()
+    {
+        // Auto-find player if not assigned
+        if (player == null)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                player = playerObj.transform;
+                Debug.Log($"{gameObject.name}: Found player automatically");
+            }
+            else
+            {
+                Debug.LogError($"{gameObject.name}: No player found! Tag your player as 'Player'");
+                enabled = false;
+                return;
+            }
+        }
+
+        // Validate fire point
+        if (firePoint == null)
+        {
+            Debug.LogWarning($"{gameObject.name}: No fire point assigned, using enemy position");
+            firePoint = transform;
+        }
+
+        // Validate projectile
+        if (projectilePrefab == null)
+        {
+            Debug.LogError($"{gameObject.name}: No projectile prefab assigned!");
+        }
+
+        // Set initial fire time with variation
+        nextFireTime = Time.time + fireRate + Random.Range(-fireRateVariation, fireRateVariation);
+    }
+
+    void Update()
+    {
+        if (player == null) return;
+
+        // Check if player is in range
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        canSeePlayer = distanceToPlayer <= detectionRange;
+
+        if (canSeePlayer)
+        {
+            // Track player
+            RotateTowardPlayer();
+
+            // Try to shoot
+            if (Time.time >= nextFireTime)
+            {
+                Shoot();
+
+                // Schedule next shot with random variation
+                float variance = Random.Range(-fireRateVariation, fireRateVariation);
+                nextFireTime = Time.time + fireRate + variance;
+            }
+        }
+    }
+
+    void RotateTowardPlayer()
+    {
+        // Calculate direction to player
+        Vector3 direction = player.position - transform.position;
+
+        if (!allowVerticalAiming || lockXZRotation)
+        {
+            // Only rotate on Y axis (keep enemy upright, no looking up/down)
+            direction.y = 0f;
+        }
+
+        if (direction.sqrMagnitude > 0.001f)
+        {
+            // Smoothly rotate toward player
+            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            transform.rotation = Quaternion.Slerp(
+                transform.rotation,
+                targetRotation,
+                Time.deltaTime * rotationSpeed
+            );
+        }
+    }
+
+    void Shoot()
+    {
+        if (projectilePrefab == null)
+        {
+            Debug.LogWarning($"{gameObject.name}: Can't shoot - no projectile prefab!");
+            return;
+        }
+
+        // Spawn projectile at fire point
+        GameObject projectile = Instantiate(
+            projectilePrefab,
+            firePoint.position,
+            firePoint.rotation
+        );
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"{gameObject.name}: SHOOT! Spawned projectile at {firePoint.position}");
+        }
+
+        // Optional: Set projectile velocity if it has Rigidbody
+        Rigidbody rb = projectile.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            EnemyProjectile projScript = projectile.GetComponent<EnemyProjectile>();
+            if (projScript != null)
+            {
+                rb.linearVelocity = firePoint.forward * projScript.speed;
+            }
+        }
+    }
+
+    // Visualize detection range in editor
+    void OnDrawGizmosSelected()
+    {
+        if (showDetectionRange)
+        {
+            Gizmos.color = canSeePlayer ? Color.red : Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, detectionRange);
+        }
+    }
+
+    // Public methods
+    public bool CanSeePlayer() => canSeePlayer;
+    public float GetDistanceToPlayer() => player != null ? Vector3.Distance(transform.position, player.position) : float.MaxValue;
+}
