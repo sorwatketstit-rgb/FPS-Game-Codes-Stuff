@@ -44,7 +44,11 @@ public class EnemyProjectile : MonoBehaviour
         rb.useGravity = false;
         rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 
-        // Set initial velocity
+        // IMPORTANT: Clear any existing velocity first
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        // Set velocity in the direction projectile is facing
         rb.linearVelocity = transform.forward * speed;
 
         // Auto-destroy after lifetime
@@ -52,7 +56,7 @@ public class EnemyProjectile : MonoBehaviour
 
         if (showDebugInfo)
         {
-            Debug.Log($"Projectile spawned at {transform.position}, moving at {speed} units/s");
+            Debug.Log($"Projectile spawned, velocity: {rb.linearVelocity}, speed: {rb.linearVelocity.magnitude}");
         }
     }
 
