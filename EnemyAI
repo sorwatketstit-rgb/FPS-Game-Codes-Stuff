@@ -11,8 +11,24 @@ public class EnemyAI : MonoBehaviour
     [Range(5f, 100f)]
     public float detectionRange = 30f;
 
-    [Tooltip("Show detection range in editor")]
+    [Tooltip("Range at which enemy walks toward player (should be > detection range)")]
+    [Range(5f, 150f)]
+    public float walkRange = 50f;
+
+    [Tooltip("Show detection ranges in editor")]
     public bool showDetectionRange = true;
+
+    [Header("Movement")]
+    [Tooltip("How fast enemy walks toward player")]
+    [Range(1f, 20f)]
+    public float walkSpeed = 5f;
+
+    [Tooltip("Stop moving when this close to player")]
+    [Range(1f, 30f)]
+    public float stopDistance = 20f;
+
+    [Tooltip("Use NavMesh for pathfinding")]
+    public bool useNavMesh = true;
 
     [Header("Rotation")]
     [Tooltip("How fast enemy rotates to face player")]
@@ -46,9 +62,34 @@ public class EnemyAI : MonoBehaviour
     // Private variables
     private float nextFireTime = 0f;
     private bool canSeePlayer = false;
+    private bool shouldWalk = false;
+    private Rigidbody rb;
+    private UnityEngine.AI.NavMeshAgent navAgent;
 
     void Start()
     {
+        // Get components
+        rb = GetComponent<Rigidbody>();
+        navAgent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+
+        // Setup NavMesh if enabled
+        if (useNavMesh)
+        {
+            if (navAgent == null)
+            {
+                Debug.LogError($"{gameObject.name}: Use NavMesh is enabled but no NavMeshAgent component found!");
+            }
+            else
+            {
+                navAgent.speed = walkSpeed;
+                navAgent.stoppingDistance = stopDistance;
+            }
+        }
+        else if (rb != null)
+        {
+            rb.freezeRotation = true; // Prevent physics from rotating enemy
+        }
+
         // Auto-find player if not assigned
         if (player == null)
         {
@@ -69,14 +110,24 @@ public class EnemyAI : MonoBehaviour
         // Validate fire point
         if (firePoint == null)
         {
-            Debug.LogWarning($"{gameObject.name}: No fire point assigned, using enemy position");
-            firePoint = transform;
+            Debug.LogWarning($"{gameObject.name}: No fire point assigned, creating one at enemy position");
+            GameObject fp = new GameObject("FirePoint");
+            fp.transform.SetParent(transform);
+            fp.transform.localPosition = Vector3.forward * 0.5f; // Slightly in front
+            firePoint = fp.transform;
         }
 
         // Validate projectile
         if (projectilePrefab == null)
         {
             Debug.LogError($"{gameObject.name}: No projectile prefab assigned!");
+        }
+
+        // Validate walk range
+        if (walkRange < detectionRange)
+        {
+            Debug.LogWarning($"{gameObject.name}: Walk range should be larger than detection range!");
+            walkRange = detectionRange + 10f;
         }
 
         // Set initial fire time with variation
@@ -87,17 +138,32 @@ public class EnemyAI : MonoBehaviour
     {
         if (player == null) return;
 
-        // Check if player is in range
+        // Check distances
         float distanceToPlayer = Vector3.Distance(transform.position, player.position);
         canSeePlayer = distanceToPlayer <= detectionRange;
+        shouldWalk = distanceToPlayer <= walkRange && distanceToPlayer > stopDistance;
 
-        if (canSeePlayer)
+        // Handle NavMesh movement
+        if (useNavMesh && navAgent != null)
         {
-            // Track player
+            if (shouldWalk)
+            {
+                navAgent.isStopped = false;
+                navAgent.SetDestination(player.position);
+            }
+            else
+            {
+                navAgent.isStopped = true;
+            }
+        }
+
+        if (canSeePlayer || shouldWalk)
+        {
+            // Always rotate toward player when tracking
             RotateTowardPlayer();
 
-            // Try to shoot
-            if (Time.time >= nextFireTime)
+            // Only shoot when in shooting range
+            if (canSeePlayer && Time.time >= nextFireTime)
             {
                 Shoot();
 
@@ -105,6 +171,15 @@ public class EnemyAI : MonoBehaviour
                 float variance = Random.Range(-fireRateVariation, fireRateVariation);
                 nextFireTime = Time.time + fireRate + variance;
             }
+        }
+    }
+
+    void FixedUpdate()
+    {
+        // Handle movement in FixedUpdate for physics
+        if (shouldWalk && rb != null)
+        {
+            MoveTowardPlayer();
         }
     }
 
@@ -131,6 +206,23 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
+    void MoveTowardPlayer()
+    {
+        // Calculate direction to player (horizontal only for walking)
+        Vector3 direction = player.position - transform.position;
+        direction.y = 0f; // Keep movement horizontal
+        direction.Normalize();
+
+        // Move using Rigidbody
+        Vector3 targetVelocity = direction * walkSpeed;
+
+        // Keep vertical velocity (gravity)
+        targetVelocity.y = rb.linearVelocity.y;
+
+        // Apply movement
+        rb.linearVelocity = Vector3.Lerp(rb.linearVelocity, targetVelocity, Time.fixedDeltaTime * 5f);
+    }
+
     void Shoot()
     {
         if (projectilePrefab == null)
@@ -139,27 +231,26 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
-        // Spawn projectile at fire point
+        // Spawn projectile at fire point with FIRE POINT'S rotation (not enemy rotation)
         GameObject projectile = Instantiate(
             projectilePrefab,
             firePoint.position,
-            firePoint.rotation
+            firePoint.rotation  // Use fire point rotation for accurate aim
         );
 
         if (showDebugInfo)
         {
-            Debug.Log($"{gameObject.name}: SHOOT! Spawned projectile at {firePoint.position}");
+            Debug.Log($"{gameObject.name}: SHOOT! Direction: {firePoint.forward}");
         }
 
-        // Optional: Set projectile velocity if it has Rigidbody
-        Rigidbody rb = projectile.GetComponent<Rigidbody>();
-        if (rb != null)
+        // Get projectile script and set velocity properly
+        EnemyProjectile projScript = projectile.GetComponent<EnemyProjectile>();
+        Rigidbody projRb = projectile.GetComponent<Rigidbody>();
+
+        if (projRb != null && projScript != null)
         {
-            EnemyProjectile projScript = projectile.GetComponent<EnemyProjectile>();
-            if (projScript != null)
-            {
-                rb.linearVelocity = firePoint.forward * projScript.speed;
-            }
+            // IMPORTANT: Set velocity based on fire point's forward direction
+            projRb.linearVelocity = firePoint.forward * projScript.speed;
         }
     }
 
@@ -168,8 +259,17 @@ public class EnemyAI : MonoBehaviour
     {
         if (showDetectionRange)
         {
+            // Shooting range (red/yellow)
             Gizmos.color = canSeePlayer ? Color.red : Color.yellow;
             Gizmos.DrawWireSphere(transform.position, detectionRange);
+
+            // Walk range (blue)
+            Gizmos.color = new Color(0.5f, 0.5f, 1f, 0.3f);
+            Gizmos.DrawWireSphere(transform.position, walkRange);
+
+            // Stop distance (green)
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireSphere(transform.position, stopDistance);
         }
     }
 
