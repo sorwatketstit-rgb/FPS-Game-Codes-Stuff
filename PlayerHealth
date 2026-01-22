@@ -1,0 +1,262 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+public class PlayerHealth : MonoBehaviour
+{
+    [System.Serializable]
+    public class LimbUI
+    {
+        public string limbName;
+        public GameObject healthyImage;
+        public GameObject damagedImage;
+        public GameObject disabledImage;
+
+        [HideInInspector] public int currentHits = 0;
+    }
+
+    [Header("Limb Settings")]
+    [Tooltip("Maximum hits before limb is disabled")]
+    [Range(1, 10)]
+    public int maxHitsPerLimb = 3;
+
+    [Header("Limb UI (6 limbs total)")]
+    public LimbUI leftArm;
+    public LimbUI rightArm;
+    public LimbUI leftLeg;
+    public LimbUI rightLeg;
+    public LimbUI body;
+    public LimbUI head;
+
+    [Header("Speed Reduction")]
+    [Tooltip("Speed reduction per disabled limb (0.15 = 15%)")]
+    [Range(0f, 1f)]
+    public float speedReductionPerLimb = 0.15f;
+
+    [Header("References")]
+    [Tooltip("Player movement script to apply slowness")]
+    public MomentumMovement movementScript;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    // Private variables
+    private LimbUI[] allLimbs;
+    private int disabledLimbCount = 0;
+    private float baseSpeed;
+    private bool isDead = false;
+
+    void Start()
+    {
+        // Create array of all limbs for easy access
+        allLimbs = new LimbUI[] { leftArm, rightArm, leftLeg, rightLeg, body, head };
+
+        // Validate all limbs
+        foreach (var limb in allLimbs)
+        {
+            if (limb.healthyImage == null || limb.damagedImage == null || limb.disabledImage == null)
+            {
+                Debug.LogError($"Limb {limb.limbName} is missing UI images!");
+            }
+        }
+
+        // Get movement script if not assigned
+        if (movementScript == null)
+        {
+            movementScript = GetComponent<MomentumMovement>();
+            if (movementScript == null)
+            {
+                Debug.LogError("No MomentumMovement script found on player!");
+            }
+        }
+
+        // Store base speed
+        if (movementScript != null)
+        {
+            baseSpeed = movementScript.moveSpeed;
+        }
+
+        // Initialize all limbs to healthy state
+        foreach (var limb in allLimbs)
+        {
+            limb.currentHits = 0;
+            UpdateLimbUI(limb);
+        }
+
+        Debug.Log("Player Health System initialized! 6 limbs ready.");
+    }
+
+    public void TakeDamage()
+    {
+        if (isDead) return;
+
+        // Pick a random limb
+        LimbUI randomLimb = allLimbs[Random.Range(0, allLimbs.Length)];
+
+        // Increase hit count
+        randomLimb.currentHits++;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Hit to {randomLimb.limbName}! Hits: {randomLimb.currentHits}/{maxHitsPerLimb}");
+        }
+
+        // Check if limb just became disabled
+        if (randomLimb.currentHits == maxHitsPerLimb)
+        {
+            disabledLimbCount++;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"{randomLimb.limbName} is now DISABLED! Total disabled limbs: {disabledLimbCount}/6");
+            }
+
+            // Check for death
+            if (disabledLimbCount >= 6)
+            {
+                Die();
+                return;
+            }
+
+            // Apply speed reduction
+            UpdateMovementSpeed();
+        }
+
+        // Update UI
+        UpdateLimbUI(randomLimb);
+    }
+
+    void UpdateLimbUI(LimbUI limb)
+    {
+        // Disable all images first
+        limb.healthyImage.SetActive(false);
+        limb.damagedImage.SetActive(false);
+        limb.disabledImage.SetActive(false);
+
+        // Enable correct image based on hit count
+        if (limb.currentHits == 0)
+        {
+            // Healthy (0 hits)
+            limb.healthyImage.SetActive(true);
+        }
+        else if (limb.currentHits < maxHitsPerLimb)
+        {
+            // Damaged (1-2 hits, or more if max increased)
+            limb.damagedImage.SetActive(true);
+        }
+        else
+        {
+            // Disabled (3+ hits, reached limit)
+            limb.disabledImage.SetActive(true);
+        }
+    }
+
+    void UpdateMovementSpeed()
+    {
+        if (movementScript == null) return;
+
+        // Calculate speed reduction
+        // 1 disabled = 85% speed (15% reduction)
+        // 2 disabled = 70% speed (30% reduction)
+        // etc.
+        float speedMultiplier = 1f - (disabledLimbCount * speedReductionPerLimb);
+        speedMultiplier = Mathf.Clamp01(speedMultiplier); // Keep between 0-1
+
+        // Apply to movement script
+        movementScript.moveSpeed = baseSpeed * speedMultiplier;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Speed updated: {movementScript.moveSpeed:F1} ({speedMultiplier * 100:F0}% of base speed)");
+        }
+    }
+
+    void Die()
+    {
+        isDead = true;
+
+        Debug.Log("PLAYER DIED! All limbs disabled.");
+
+        // TODO: Add death effects, game over screen, etc.
+        // For now, just stop movement
+        if (movementScript != null)
+        {
+            movementScript.moveSpeed = 0f;
+        }
+
+        // You can add more here:
+        // - Show death screen
+        // - Respawn player
+        // - End game
+    }
+
+    // Public methods for upgrades/healing
+    public void HealLimb(int limbIndex)
+    {
+        if (limbIndex < 0 || limbIndex >= allLimbs.Length) return;
+
+        LimbUI limb = allLimbs[limbIndex];
+
+        bool wasDisabled = limb.currentHits >= maxHitsPerLimb;
+
+        // Reduce hits
+        limb.currentHits = Mathf.Max(0, limb.currentHits - 1);
+
+        // If limb was disabled and now isn't, update count
+        if (wasDisabled && limb.currentHits < maxHitsPerLimb)
+        {
+            disabledLimbCount--;
+            UpdateMovementSpeed();
+        }
+
+        UpdateLimbUI(limb);
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Healed {limb.limbName}! Hits: {limb.currentHits}/{maxHitsPerLimb}");
+        }
+    }
+
+    public void HealRandomLimb()
+    {
+        // Find damaged limbs
+        int[] damagedIndices = new int[6];
+        int damagedCount = 0;
+
+        for (int i = 0; i < allLimbs.Length; i++)
+        {
+            if (allLimbs[i].currentHits > 0)
+            {
+                damagedIndices[damagedCount] = i;
+                damagedCount++;
+            }
+        }
+
+        if (damagedCount > 0)
+        {
+            int randomIndex = damagedIndices[Random.Range(0, damagedCount)];
+            HealLimb(randomIndex);
+        }
+    }
+
+    public void IncreaseMaxHits(int additionalHits)
+    {
+        maxHitsPerLimb += additionalHits;
+
+        // Update all UI in case any limbs are now not disabled
+        foreach (var limb in allLimbs)
+        {
+            UpdateLimbUI(limb);
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Max hits increased to {maxHitsPerLimb}!");
+        }
+    }
+
+    // Getters for other scripts
+    public bool IsDead() => isDead;
+    public int GetDisabledLimbCount() => disabledLimbCount;
+    public float GetCurrentSpeedMultiplier() => 1f - (disabledLimbCount * speedReductionPerLimb);
+    public int GetLimbHits(int limbIndex) => limbIndex >= 0 && limbIndex < allLimbs.Length ? allLimbs[limbIndex].currentHits : 0;
+}
