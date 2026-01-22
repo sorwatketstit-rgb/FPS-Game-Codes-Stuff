@@ -146,6 +146,9 @@ public class PlayerShooting : MonoBehaviour
             {
                 enemy.TakeDamage();
                 Debug.Log($"Damaged enemy: {enemy.gameObject.name}");
+                // EnemyHealth.TakeDamage(int damageAmount = 1)
+                // Can now take damage amount as parameter Default is 1 (backwards compatible)
+                // Example: enemy.TakeDamage(2) deals 2 hits
             }
 
             // Visual debug
