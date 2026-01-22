@@ -114,8 +114,9 @@ public class PlayerShooting : MonoBehaviour
 
     void HandleShooting()
     {
-        // Check if player is holding left mouse button and can shoot
-        if (Input.GetButton("Fire1") && Time.time >= nextFireTime)
+        // Check if player is holding left mouse button (Fire1) and can shoot
+        // Make sure it's ONLY left mouse, not other keys
+        if (Input.GetButton("Fire1") && !Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl) && Time.time >= nextFireTime)
         {
             Shoot();
             nextFireTime = Time.time + fireRate;
