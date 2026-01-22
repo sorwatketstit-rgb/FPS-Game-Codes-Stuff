@@ -33,7 +33,7 @@ public class PlayerHealth : MonoBehaviour
     public float speedReductionPerLimb = 0.15f;
 
     [Header("References")]
-    [Tooltip("Player movement script to apply slowness")]
+    [Tooltip("Leave empty - auto-finds MomentumMovement on player")]
     public MomentumMovement movementScript;
 
     [Header("Debug")]
@@ -50,13 +50,28 @@ public class PlayerHealth : MonoBehaviour
         // Create array of all limbs for easy access
         allLimbs = new LimbUI[] { leftArm, rightArm, leftLeg, rightLeg, body, head };
 
-        // Validate all limbs
+        // Validate all limbs have names
+        if (string.IsNullOrEmpty(leftArm.limbName)) leftArm.limbName = "Left Arm";
+        if (string.IsNullOrEmpty(rightArm.limbName)) rightArm.limbName = "Right Arm";
+        if (string.IsNullOrEmpty(leftLeg.limbName)) leftLeg.limbName = "Left Leg";
+        if (string.IsNullOrEmpty(rightLeg.limbName)) rightLeg.limbName = "Right Leg";
+        if (string.IsNullOrEmpty(body.limbName)) body.limbName = "Body";
+        if (string.IsNullOrEmpty(head.limbName)) head.limbName = "Head";
+
+        // Validate all limbs have UI
+        bool missingUI = false;
         foreach (var limb in allLimbs)
         {
             if (limb.healthyImage == null || limb.damagedImage == null || limb.disabledImage == null)
             {
-                Debug.LogError($"Limb {limb.limbName} is missing UI images!");
+                Debug.LogError($"Limb '{limb.limbName}' is missing UI images! Check Inspector.");
+                missingUI = true;
             }
+        }
+
+        if (missingUI)
+        {
+            Debug.LogError("PlayerHealth: Some limbs are missing UI! The system won't work properly.");
         }
 
         // Get movement script if not assigned
@@ -65,7 +80,11 @@ public class PlayerHealth : MonoBehaviour
             movementScript = GetComponent<MomentumMovement>();
             if (movementScript == null)
             {
-                Debug.LogError("No MomentumMovement script found on player!");
+                Debug.LogError("No MomentumMovement script found on player! Speed reduction won't work.");
+            }
+            else
+            {
+                Debug.Log("Auto-found MomentumMovement script!");
             }
         }
 
@@ -73,16 +92,18 @@ public class PlayerHealth : MonoBehaviour
         if (movementScript != null)
         {
             baseSpeed = movementScript.moveSpeed;
+            Debug.Log($"Base speed stored: {baseSpeed}");
         }
 
         // Initialize all limbs to healthy state
+        Debug.Log("Initializing all limbs to healthy state...");
         foreach (var limb in allLimbs)
         {
             limb.currentHits = 0;
             UpdateLimbUI(limb);
         }
 
-        Debug.Log("Player Health System initialized! 6 limbs ready.");
+        Debug.Log("Player Health System initialized! 6 limbs ready. Try shooting the player!");
     }
 
     public void TakeDamage()
@@ -127,6 +148,13 @@ public class PlayerHealth : MonoBehaviour
 
     void UpdateLimbUI(LimbUI limb)
     {
+        // Safety check - make sure all images exist
+        if (limb.healthyImage == null || limb.damagedImage == null || limb.disabledImage == null)
+        {
+            Debug.LogError($"Missing UI images for {limb.limbName}!");
+            return;
+        }
+
         // Disable all images first
         limb.healthyImage.SetActive(false);
         limb.damagedImage.SetActive(false);
@@ -137,16 +165,31 @@ public class PlayerHealth : MonoBehaviour
         {
             // Healthy (0 hits)
             limb.healthyImage.SetActive(true);
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"{limb.limbName}: Showing HEALTHY image");
+            }
         }
         else if (limb.currentHits < maxHitsPerLimb)
         {
             // Damaged (1-2 hits, or more if max increased)
             limb.damagedImage.SetActive(true);
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"{limb.limbName}: Showing DAMAGED image ({limb.currentHits} hits)");
+            }
         }
         else
         {
             // Disabled (3+ hits, reached limit)
             limb.disabledImage.SetActive(true);
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"{limb.limbName}: Showing DISABLED image ({limb.currentHits} hits)");
+            }
         }
     }
 
