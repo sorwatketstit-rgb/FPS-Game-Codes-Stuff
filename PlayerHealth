@@ -36,6 +36,14 @@ public class PlayerHealth : MonoBehaviour
     [Tooltip("Leave empty - auto-finds MomentumMovement on player")]
     public MomentumMovement movementScript;
 
+    [Header("Damage Flash Effect")]
+    [Tooltip("Object to enable briefly when taking damage (e.g., red screen overlay)")]
+    public GameObject damageFlashObject;
+
+    [Tooltip("How long to show damage flash")]
+    [Range(0.05f, 1f)]
+    public float damageFlashDuration = 0.2f;
+
     [Header("Debug")]
     public bool showDebugInfo = true;
 
@@ -44,6 +52,7 @@ public class PlayerHealth : MonoBehaviour
     private int disabledLimbCount = 0;
     private float baseSpeed;
     private bool isDead = false;
+    private float damageFlashTimer = 0f;
 
     void Start()
     {
@@ -95,6 +104,12 @@ public class PlayerHealth : MonoBehaviour
             Debug.Log($"Base speed stored: {baseSpeed}");
         }
 
+        // Make sure damage flash starts disabled
+        if (damageFlashObject != null)
+        {
+            damageFlashObject.SetActive(false);
+        }
+
         // Initialize all limbs to healthy state
         Debug.Log("Initializing all limbs to healthy state...");
         foreach (var limb in allLimbs)
@@ -106,9 +121,30 @@ public class PlayerHealth : MonoBehaviour
         Debug.Log("Player Health System initialized! 6 limbs ready. Try shooting the player!");
     }
 
+    void Update()
+    {
+        // Handle damage flash timer
+        if (damageFlashTimer > 0f)
+        {
+            damageFlashTimer -= Time.deltaTime;
+
+            if (damageFlashTimer <= 0f && damageFlashObject != null)
+            {
+                damageFlashObject.SetActive(false);
+            }
+        }
+    }
+
     public void TakeDamage()
     {
         if (isDead) return;
+
+        // Trigger damage flash
+        if (damageFlashObject != null)
+        {
+            damageFlashObject.SetActive(true);
+            damageFlashTimer = damageFlashDuration;
+        }
 
         // Pick a random limb
         LimbUI randomLimb = allLimbs[Random.Range(0, allLimbs.Length)];
