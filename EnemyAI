@@ -35,11 +35,8 @@ public class EnemyAI : MonoBehaviour
     [Range(1f, 10f)]
     public float rotationSpeed = 3f;
 
-    [Tooltip("Allow enemy to look up/down at player")]
+    [Tooltip("Allow firepoint to aim up/down at player")]
     public bool allowVerticalAiming = true;
-
-    [Tooltip("If vertical aiming disabled, only rotate body on Y axis")]
-    public bool lockXZRotation = false;
 
     [Header("Shooting")]
     [Tooltip("Projectile prefab to spawn")]
@@ -83,10 +80,17 @@ public class EnemyAI : MonoBehaviour
             {
                 navAgent.speed = walkSpeed;
                 navAgent.stoppingDistance = stopDistance;
+
+                // If using NavMesh, set Rigidbody to kinematic (NavMesh controls movement)
+                if (rb != null)
+                {
+                    rb.isKinematic = true;
+                }
             }
         }
         else if (rb != null)
         {
+            rb.isKinematic = false;
             rb.freezeRotation = true; // Prevent physics from rotating enemy
         }
 
@@ -131,7 +135,10 @@ public class EnemyAI : MonoBehaviour
         }
 
         // Set initial fire time with variation
-        nextFireTime = Time.time + fireRate + Random.Range(-fireRateVariation, fireRateVariation);
+        float initialVariation = Random.Range(0f, fireRateVariation);
+        if (Random.value > 0.5f)
+            initialVariation = -initialVariation;
+        nextFireTime = Time.time + fireRate + initialVariation;
     }
 
     void Update()
@@ -168,7 +175,9 @@ public class EnemyAI : MonoBehaviour
                 Shoot();
 
                 // Schedule next shot with random variation
-                float variance = Random.Range(-fireRateVariation, fireRateVariation);
+                float variance = Random.Range(0f, fireRateVariation);
+                if (Random.value > 0.5f)
+                    variance = -variance;
                 nextFireTime = Time.time + fireRate + variance;
             }
         }
@@ -188,21 +197,34 @@ public class EnemyAI : MonoBehaviour
         // Calculate direction to player
         Vector3 direction = player.position - transform.position;
 
-        if (!allowVerticalAiming || lockXZRotation)
-        {
-            // Only rotate on Y axis (keep enemy upright, no looking up/down)
-            direction.y = 0f;
-        }
+        // BODY ROTATION: Only rotate horizontally (Y-axis)
+        Vector3 horizontalDirection = direction;
+        horizontalDirection.y = 0f;
 
-        if (direction.sqrMagnitude > 0.001f)
+        if (horizontalDirection.sqrMagnitude > 0.001f)
         {
-            // Smoothly rotate toward player
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            // Smoothly rotate body toward player (horizontal only)
+            Quaternion targetRotation = Quaternion.LookRotation(horizontalDirection);
             transform.rotation = Quaternion.Slerp(
                 transform.rotation,
                 targetRotation,
                 Time.deltaTime * rotationSpeed
             );
+        }
+
+        // FIREPOINT ROTATION: Aim up/down at player if enabled
+        if (allowVerticalAiming && firePoint != null && firePoint != transform)
+        {
+            // Full 3D direction including vertical
+            if (direction.sqrMagnitude > 0.001f)
+            {
+                Quaternion firePointRotation = Quaternion.LookRotation(direction);
+                firePoint.rotation = Quaternion.Slerp(
+                    firePoint.rotation,
+                    firePointRotation,
+                    Time.deltaTime * rotationSpeed
+                );
+            }
         }
     }
 
