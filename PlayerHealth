@@ -146,8 +146,33 @@ public class PlayerHealth : MonoBehaviour
             damageFlashTimer = damageFlashDuration;
         }
 
-        // Pick a random limb
-        LimbUI randomLimb = allLimbs[Random.Range(0, allLimbs.Length)];
+        // Build a list of limbs that are NOT disabled
+        LimbUI[] validLimbs = new LimbUI[allLimbs.Length];
+        int validCount = 0;
+
+        foreach (var limb in allLimbs)
+        {
+            if (limb.currentHits < maxHitsPerLimb)
+            {
+                validLimbs[validCount] = limb;
+                validCount++;
+            }
+        }
+
+        // If no valid limbs left, player should be dead
+        if (validCount == 0)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log("No valid limbs left to damage! Player will die.");
+            }
+
+            Die();
+            return;
+        }
+
+        // Pick a random NON-disabled limb
+        LimbUI randomLimb = validLimbs[Random.Range(0, validCount)];
 
         // Increase hit count
         randomLimb.currentHits++;
