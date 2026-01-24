@@ -86,6 +86,10 @@ public class ModernFPSCamera : MonoBehaviour
 
     void LateUpdate()
     {
+        // Keep camera synced to player AFTER physics (prevents jitter)
+        UpdateCameraPosition();
+
+        // Handle visual model bobbing
         HandleModelBobbing();
     }
 
@@ -103,6 +107,13 @@ public class ModernFPSCamera : MonoBehaviour
 
         cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
         player.rotation = Quaternion.Euler(0f, yRotation, 0f);
+    }
+
+    void UpdateCameraPosition()
+    {
+        // Explicitly set camera position to player + offset
+        // Done in LateUpdate to avoid Rigidbody jitter
+        cameraHolder.position = player.position + cameraOffset;
     }
 
     void HandleModelBobbing()
