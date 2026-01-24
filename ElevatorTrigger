@@ -1,0 +1,44 @@
+using UnityEngine;
+
+[RequireComponent(typeof(Collider))]
+public class ElevatorTrigger : MonoBehaviour
+{
+    private FloorWaveManager manager;
+    private bool hasTriggered = false;
+
+    void Start()
+    {
+        // Make sure collider is set to trigger
+        Collider col = GetComponent<Collider>();
+        if (col != null)
+        {
+            col.isTrigger = true;
+        }
+    }
+
+    public void SetManager(FloorWaveManager floorManager)
+    {
+        manager = floorManager;
+    }
+
+    void OnTriggerEnter(Collider other)
+    {
+        // Check if player entered
+        if (!hasTriggered && other.CompareTag("Player"))
+        {
+            hasTriggered = true;
+
+            Debug.Log("Player entered elevator!");
+
+            // Notify manager
+            if (manager != null)
+            {
+                manager.OnPlayerEnterElevator();
+            }
+            else
+            {
+                Debug.LogError("ElevatorTrigger: No manager reference set!");
+            }
+        }
+    }
+}
