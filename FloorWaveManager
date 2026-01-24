@@ -1,0 +1,449 @@
+using UnityEngine;
+using UnityEngine.Playables;
+using System.Collections;
+using System.Collections.Generic;
+
+public class FloorWaveManager : MonoBehaviour
+{
+    [Header("Map Prefabs")]
+    [Tooltip("List of 5 different map prefabs to randomly select")]
+    public GameObject[] mapPrefabs;
+
+    [Tooltip("Where to spawn maps (usually Vector3.zero or specific location)")]
+    public Transform mapSpawnLocation;
+
+    [Header("Player")]
+    [Tooltip("Player object to teleport")]
+    public GameObject player;
+
+    [Header("Enemy Prefabs")]
+    [Tooltip("Enemy type 1")]
+    public GameObject enemyType1;
+
+    [Tooltip("Enemy type 2")]
+    public GameObject enemyType2;
+
+    [Header("Wave Settings")]
+    [Tooltip("Minimum enemies per wave")]
+    [Range(1, 10)]
+    public int minEnemiesPerWave = 3;
+
+    [Tooltip("Maximum enemies per wave")]
+    [Range(1, 15)]
+    public int maxEnemiesPerWave = 5;
+
+    [Tooltip("Delay between waves (seconds)")]
+    [Range(0.5f, 10f)]
+    public float waveClearDelay = 2f;
+
+    [Header("Wave Clear Sound")]
+    [Tooltip("Audio source for wave clear sound")]
+    public AudioSource waveClearAudio;
+
+    [Tooltip("Sound clip to play when wave is cleared")]
+    public AudioClip waveClearSound;
+
+    [Header("Upgrade Room")]
+    [Tooltip("Upgrade room object (disabled by default)")]
+    public GameObject upgradeRoom;
+
+    [Tooltip("Where to spawn player in upgrade room")]
+    public Transform upgradeRoomPlayerSpawn;
+
+    [Header("Lobby")]
+    [Tooltip("Lobby elevator trigger (for starting first floor from lobby)")]
+    public ElevatorTrigger lobbyElevator;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    // Private variables
+    private int currentFloor = 1;
+    private int currentWave = 0;
+    private int totalWavesThisFloor = 0;
+    private GameObject currentMap;
+    private List<GameObject> spawnedEnemies = new List<GameObject>();
+    private bool isWaveActive = false;
+    private GameObject elevatorObject;
+    private bool hasStarted = false;
+
+    void Start()
+    {
+        // Validate setup
+        if (mapPrefabs == null || mapPrefabs.Length == 0)
+        {
+            Debug.LogError("No map prefabs assigned! Add 5 map prefabs in Inspector.");
+            enabled = false;
+            return;
+        }
+
+        if (enemyType1 == null || enemyType2 == null)
+        {
+            Debug.LogError("Enemy prefabs not assigned!");
+            enabled = false;
+            return;
+        }
+
+        if (player == null)
+        {
+            // Try to find player
+            player = GameObject.FindGameObjectWithTag("Player");
+            if (player == null)
+            {
+                Debug.LogError("No player assigned or found!");
+                enabled = false;
+                return;
+            }
+        }
+
+        // Make sure upgrade room starts disabled
+        if (upgradeRoom != null)
+        {
+            upgradeRoom.SetActive(false);
+        }
+
+        Debug.Log("Floor Wave Manager initialized! Waiting in lobby...");
+    }
+
+    void Awake()
+    {
+        // Link lobby elevator EARLY (before Start)
+        if (lobbyElevator != null)
+        {
+            lobbyElevator.SetManager(this);
+            Debug.Log("Lobby elevator linked in Awake!");
+        }
+    }
+
+    void Update()
+    {
+        // Check if all enemies in current wave are dead
+        if (isWaveActive)
+        {
+            CheckWaveCleared();
+        }
+    }
+
+    void StartFloor()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log($"=== STARTING FLOOR {currentFloor} ===");
+        }
+
+        // Calculate how many waves for this floor
+        // Floors 1-3: 1 wave, 4-6: 2 waves, 7-9: 3 waves, etc.
+        totalWavesThisFloor = 1 + ((currentFloor - 1) / 3);
+        currentWave = 0;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Floor {currentFloor} will have {totalWavesThisFloor} wave(s)");
+        }
+
+        // Spawn random map
+        SpawnRandomMap();
+
+        // Start first wave after brief delay
+        StartCoroutine(StartWaveAfterDelay(0.5f));
+    }
+
+    void SpawnRandomMap()
+    {
+        // Destroy old map if exists
+        if (currentMap != null)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log("Destroying old map...");
+            }
+            Destroy(currentMap);
+        }
+
+        // Select random map from prefabs
+        int randomIndex = Random.Range(0, mapPrefabs.Length);
+        GameObject selectedMapPrefab = mapPrefabs[randomIndex];
+
+        // Determine spawn position
+        Vector3 spawnPosition = mapSpawnLocation != null ? mapSpawnLocation.position : Vector3.zero;
+        Quaternion spawnRotation = mapSpawnLocation != null ? mapSpawnLocation.rotation : Quaternion.identity;
+
+        // Spawn map
+        currentMap = Instantiate(selectedMapPrefab, spawnPosition, spawnRotation);
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Spawned map: {selectedMapPrefab.name} at {spawnPosition}");
+        }
+
+        // Teleport player to PlayerSpawner in map
+        TeleportPlayerToSpawner();
+    }
+
+    void TeleportPlayerToSpawner()
+    {
+        if (player == null) return;
+
+        // Find PlayerSpawner in current map
+        GameObject spawner = GameObject.FindGameObjectWithTag("PlayerSpawner");
+
+        if (spawner != null)
+        {
+            player.transform.position = spawner.transform.position;
+            player.transform.rotation = spawner.transform.rotation;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"Player teleported to {spawner.name}");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("No PlayerSpawner found in map! Tag player spawn point as 'PlayerSpawner'");
+        }
+    }
+
+    IEnumerator StartWaveAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        StartWave();
+    }
+
+    void StartWave()
+    {
+        currentWave++;
+        isWaveActive = true;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"=== WAVE {currentWave}/{totalWavesThisFloor} STARTING ===");
+        }
+
+        // Find spawn points in current map
+        Transform[] spawnPoints = FindSpawnPoints();
+
+        if (spawnPoints.Length == 0)
+        {
+            Debug.LogError("No spawn points found in map! Tag spawn points as 'EnemySpawn'");
+            return;
+        }
+
+        // Determine number of enemies to spawn
+        int enemyCount = Random.Range(minEnemiesPerWave, maxEnemiesPerWave + 1);
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Spawning {enemyCount} enemies across {spawnPoints.Length} spawn points");
+        }
+
+        // Clear old enemy list
+        spawnedEnemies.Clear();
+
+        // Spawn enemies
+        for (int i = 0; i < enemyCount; i++)
+        {
+            // Pick random spawn point
+            Transform spawnPoint = spawnPoints[Random.Range(0, spawnPoints.Length)];
+
+            // Pick random enemy type
+            GameObject enemyPrefab = Random.value > 0.5f ? enemyType1 : enemyType2;
+
+            // Spawn enemy at spawn point position
+            GameObject enemy = Instantiate(enemyPrefab, spawnPoint.position, spawnPoint.rotation);
+            spawnedEnemies.Add(enemy);
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"Spawned {enemyPrefab.name} at {spawnPoint.name}");
+            }
+        }
+    }
+
+    Transform[] FindSpawnPoints()
+    {
+        // Find all objects tagged as "EnemySpawn" in current map
+        GameObject[] spawnObjects = GameObject.FindGameObjectsWithTag("EnemySpawn");
+        Transform[] spawnTransforms = new Transform[spawnObjects.Length];
+
+        for (int i = 0; i < spawnObjects.Length; i++)
+        {
+            spawnTransforms[i] = spawnObjects[i].transform;
+        }
+
+        return spawnTransforms;
+    }
+
+    void CheckWaveCleared()
+    {
+        // Remove null references (destroyed enemies)
+        spawnedEnemies.RemoveAll(enemy => enemy == null);
+
+        // Check if all enemies are dead
+        if (spawnedEnemies.Count == 0)
+        {
+            WaveCleared();
+        }
+    }
+
+    void WaveCleared()
+    {
+        isWaveActive = false;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"=== WAVE {currentWave}/{totalWavesThisFloor} CLEARED ===");
+        }
+
+        // Play wave clear sound
+        if (waveClearAudio != null && waveClearSound != null)
+        {
+            waveClearAudio.PlayOneShot(waveClearSound);
+        }
+
+        // Check if this was the last wave
+        if (currentWave >= totalWavesThisFloor)
+        {
+            // All waves cleared!
+            AllWavesCleared();
+        }
+        else
+        {
+            // More waves to go
+            if (showDebugInfo)
+            {
+                Debug.Log($"Next wave in {waveClearDelay} seconds...");
+            }
+            StartCoroutine(StartWaveAfterDelay(waveClearDelay));
+        }
+    }
+
+    void AllWavesCleared()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log($"=== FLOOR {currentFloor} COMPLETE! ALL WAVES CLEARED ===");
+        }
+
+        // Find and enable the elevator object
+        EnableElevator();
+    }
+
+    void EnableElevator()
+    {
+        // Find elevator object in current map (tagged as "Elevator")
+        GameObject elevator = GameObject.FindGameObjectWithTag("Elevator");
+
+        if (elevator != null)
+        {
+            elevatorObject = elevator;
+
+            // Enable the elevator
+            elevator.SetActive(true);
+
+            // Try to play timeline if it has PlayableDirector
+            PlayableDirector timeline = elevator.GetComponent<PlayableDirector>();
+            if (timeline != null)
+            {
+                timeline.Play();
+
+                if (showDebugInfo)
+                {
+                    Debug.Log("Elevator door opening animation started!");
+                }
+            }
+
+            // Find the trigger inside elevator
+            ElevatorTrigger trigger = elevator.GetComponentInChildren<ElevatorTrigger>(true);
+            if (trigger != null)
+            {
+                trigger.SetManager(this);
+
+                if (showDebugInfo)
+                {
+                    Debug.Log("Elevator trigger found and linked!");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("No ElevatorTrigger component found in elevator children!");
+            }
+        }
+        else
+        {
+            Debug.LogError("No elevator found! Tag elevator object as 'Elevator'");
+        }
+    }
+
+    public void OnPlayerEnterElevator()
+    {
+        // Check if this is the lobby elevator (starting the game)
+        if (!hasStarted)
+        {
+            hasStarted = true;
+
+            if (showDebugInfo)
+            {
+                Debug.Log("Player entered lobby elevator! Starting Floor 1...");
+            }
+
+            // Start first floor
+            StartFloor();
+        }
+        else
+        {
+            // This is a floor completion elevator
+            if (showDebugInfo)
+            {
+                Debug.Log("Player entered elevator! Moving to upgrade floor...");
+            }
+
+            // Clean up current map
+            if (currentMap != null)
+            {
+                Destroy(currentMap);
+                currentMap = null;
+            }
+
+            // Show upgrade room and teleport player
+            if (upgradeRoom != null)
+            {
+                upgradeRoom.SetActive(true);
+
+                // Teleport player to upgrade room spawn
+                if (upgradeRoomPlayerSpawn != null && player != null)
+                {
+                    player.transform.position = upgradeRoomPlayerSpawn.position;
+                    player.transform.rotation = upgradeRoomPlayerSpawn.rotation;
+                }
+
+                if (showDebugInfo)
+                {
+                    Debug.Log("Upgrade room activated!");
+                }
+            }
+        }
+    }
+
+    public void OnContinueToNextFloor()
+    {
+        // Called by Continue button in upgrade room
+
+        // Hide upgrade room
+        if (upgradeRoom != null)
+        {
+            upgradeRoom.SetActive(false);
+        }
+
+        // Increment floor
+        currentFloor++;
+
+        // Start next floor
+        StartFloor();
+    }
+
+    // Public getters
+    public int GetCurrentFloor() => currentFloor;
+    public int GetCurrentWave() => currentWave;
+    public int GetTotalWaves() => totalWavesThisFloor;
+    public int GetAliveEnemies() => spawnedEnemies.Count;
+}
