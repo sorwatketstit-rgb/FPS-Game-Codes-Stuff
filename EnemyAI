@@ -227,22 +227,22 @@ public class EnemyAI : MonoBehaviour
             }
         }
     }
-
     void MoveTowardPlayer()
     {
-        // Calculate direction to player (horizontal only for walking)
+        if (rb == null || rb.isKinematic) return;
+
         Vector3 direction = player.position - transform.position;
-        direction.y = 0f; // Keep movement horizontal
+        direction.y = 0f;
         direction.Normalize();
 
-        // Move using Rigidbody
         Vector3 targetVelocity = direction * walkSpeed;
-
-        // Keep vertical velocity (gravity)
         targetVelocity.y = rb.linearVelocity.y;
 
-        // Apply movement
-        rb.linearVelocity = Vector3.Lerp(rb.linearVelocity, targetVelocity, Time.fixedDeltaTime * 5f);
+        rb.linearVelocity = Vector3.Lerp(
+            rb.linearVelocity,
+            targetVelocity,
+            Time.fixedDeltaTime * 5f
+        );
     }
 
     void Shoot()
