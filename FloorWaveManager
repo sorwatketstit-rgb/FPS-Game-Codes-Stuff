@@ -141,11 +141,11 @@ public class FloorWaveManager : MonoBehaviour
             Debug.Log($"Floor {currentFloor} will have {totalWavesThisFloor} wave(s)");
         }
 
-        // Spawn random map
+        // Spawn random map (this also teleports player)
         SpawnRandomMap();
 
-        // Start first wave after brief delay
-        StartCoroutine(StartWaveAfterDelay(0.5f));
+        // Wait a moment for map to fully spawn, then start first wave
+        StartCoroutine(StartWaveAfterDelay(1f)); // Increased delay to ensure map is ready
     }
 
     void SpawnRandomMap()
@@ -182,24 +182,61 @@ public class FloorWaveManager : MonoBehaviour
 
     void TeleportPlayerToSpawner()
     {
-        if (player == null) return;
+        if (player == null)
+        {
+            Debug.LogError("Player reference is null! Can't teleport.");
+            return;
+        }
 
-        // Find PlayerSpawner in current map
-        GameObject spawner = GameObject.FindGameObjectWithTag("PlayerSpawner");
+        if (currentMap == null)
+        {
+            Debug.LogError("Current map is null! Can't find spawn point.");
+            return;
+        }
+
+        // Find PlayerSpawner in current map's children
+        Transform[] allChildren = currentMap.GetComponentsInChildren<Transform>(true);
+        Transform spawner = null;
+
+        foreach (Transform child in allChildren)
+        {
+            if (child.CompareTag("PlayerSpawner"))
+            {
+                spawner = child;
+                break;
+            }
+        }
 
         if (spawner != null)
         {
-            player.transform.position = spawner.transform.position;
-            player.transform.rotation = spawner.transform.rotation;
+            // Disable player physics temporarily
+            Rigidbody playerRb = player.GetComponent<Rigidbody>();
+            if (playerRb != null)
+            {
+                playerRb.linearVelocity = Vector3.zero;
+                playerRb.angularVelocity = Vector3.zero;
+            }
+
+            // Teleport player
+            player.transform.position = spawner.position;
+            player.transform.rotation = spawner.rotation;
 
             if (showDebugInfo)
             {
-                Debug.Log($"Player teleported to {spawner.name}");
+                Debug.Log($"Player teleported to {spawner.name} at position {spawner.position}");
             }
         }
         else
         {
-            Debug.LogWarning("No PlayerSpawner found in map! Tag player spawn point as 'PlayerSpawner'");
+            Debug.LogError($"No PlayerSpawner found in map '{currentMap.name}'! Tag player spawn point as 'PlayerSpawner'");
+
+            // Fallback: try to find by tag in scene (old method)
+            GameObject fallbackSpawner = GameObject.FindGameObjectWithTag("PlayerSpawner");
+            if (fallbackSpawner != null)
+            {
+                player.transform.position = fallbackSpawner.transform.position;
+                Debug.LogWarning("Used fallback PlayerSpawner from scene (not ideal)");
+            }
         }
     }
 
@@ -330,48 +367,70 @@ public class FloorWaveManager : MonoBehaviour
 
     void EnableElevator()
     {
-        // Find elevator object in current map (tagged as "Elevator")
-        GameObject elevator = GameObject.FindGameObjectWithTag("Elevator");
-
-        if (elevator != null)
+        if (currentMap == null)
         {
-            elevatorObject = elevator;
+            Debug.LogError("No current map to find elevator in!");
+            return;
+        }
 
-            // Enable the elevator
-            elevator.SetActive(true);
+        // Search for elevator in the current map's children
+        Transform[] allChildren = currentMap.GetComponentsInChildren<Transform>(true); // Include inactive
 
-            // Try to play timeline if it has PlayableDirector
-            PlayableDirector timeline = elevator.GetComponent<PlayableDirector>();
-            if (timeline != null)
+        foreach (Transform child in allChildren)
+        {
+            if (child.CompareTag("Elevator"))
             {
-                timeline.Play();
+                GameObject elevator = child.gameObject;
+                elevatorObject = elevator;
+
+                // Enable the elevator
+                elevator.SetActive(true);
 
                 if (showDebugInfo)
                 {
-                    Debug.Log("Elevator door opening animation started!");
+                    Debug.Log($"Enabled elevator: {elevator.name} in map {currentMap.name}");
                 }
-            }
 
-            // Find the trigger inside elevator
-            ElevatorTrigger trigger = elevator.GetComponentInChildren<ElevatorTrigger>(true);
-            if (trigger != null)
-            {
-                trigger.SetManager(this);
-
-                if (showDebugInfo)
+                // Try to play timeline if it has PlayableDirector
+                PlayableDirector timeline = elevator.GetComponent<PlayableDirector>();
+                if (timeline != null)
                 {
-                    Debug.Log("Elevator trigger found and linked!");
+                    timeline.Play();
+
+                    if (showDebugInfo)
+                    {
+                        Debug.Log("Elevator door opening animation started!");
+                    }
                 }
-            }
-            else
-            {
-                Debug.LogWarning("No ElevatorTrigger component found in elevator children!");
+                else
+                {
+                    if (showDebugInfo)
+                    {
+                        Debug.Log("No PlayableDirector found on elevator (timeline animation)");
+                    }
+                }
+
+                // Find the trigger inside elevator
+                ElevatorTrigger trigger = elevator.GetComponentInChildren<ElevatorTrigger>(true);
+                if (trigger != null)
+                {
+                    trigger.SetManager(this);
+
+                    if (showDebugInfo)
+                    {
+                        Debug.Log("Elevator trigger found and linked!");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("No ElevatorTrigger component found in elevator children! Add ElevatorTrigger script to trigger zone.");
+                }
+
+                return; // Found and enabled, exit
             }
         }
-        else
-        {
-            Debug.LogError("No elevator found! Tag elevator object as 'Elevator'");
-        }
+
+        Debug.LogError($"No elevator found in map '{currentMap.name}'! Make sure elevator is tagged 'Elevator' and is inside the map prefab.");
     }
 
     public void OnPlayerEnterElevator()
@@ -428,6 +487,11 @@ public class FloorWaveManager : MonoBehaviour
     {
         // Called by Continue button in upgrade room
 
+        if (showDebugInfo)
+        {
+            Debug.Log("Continue button pressed! Moving to next floor...");
+        }
+
         // Hide upgrade room
         if (upgradeRoom != null)
         {
@@ -437,7 +501,7 @@ public class FloorWaveManager : MonoBehaviour
         // Increment floor
         currentFloor++;
 
-        // Start next floor
+        // Start next floor (this spawns map and teleports player)
         StartFloor();
     }
 
