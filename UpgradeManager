@@ -61,6 +61,7 @@ public class UpgradeManager : MonoBehaviour
     private UpgradeType selectedUpgrade2;
     private UpgradeType selectedUpgrade3;
     private bool hasSelectedUpgrade = false;
+    private bool isPrewarming = false; // Track if we're prewarming
 
     // Components to disable
     private MomentumMovement movementScript;
@@ -77,6 +78,12 @@ public class UpgradeManager : MonoBehaviour
         AirDrag,
         JumpForce,
         FireRate
+    }
+
+    void Awake()
+    {
+        // Initialize upgrade pool EARLY (before Start, before OnEnable)
+        InitializeUpgradePool();
     }
 
     void Start()
@@ -127,18 +134,77 @@ public class UpgradeManager : MonoBehaviour
             continueButton.SetActive(false);
         }
 
-        // Initialize upgrade pool
-        InitializeUpgradePool();
+        // PREWARM: Activate and deactivate the upgrade room to force initialization
+        PrewarmUpgradeRoom();
 
         if (showDebugInfo)
         {
-            Debug.Log("UpgradeManager initialized!");
+            Debug.Log("UpgradeManager initialized and prewarmed!");
+        }
+    }
+
+    /// <summary>
+    /// Prewarm the upgrade room by activating it once, then immediately deactivating
+    /// This ensures everything is initialized before the player actually sees it
+    /// </summary>
+    void PrewarmUpgradeRoom()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Prewarming upgrade room...");
+        }
+
+        // Check if the upgrade room GameObject exists
+        GameObject upgradeRoomObject = gameObject;
+
+        // Store original active state
+        bool wasActive = upgradeRoomObject.activeSelf;
+
+        // Set prewarm flag BEFORE activating
+        isPrewarming = true;
+
+        // Activate if not already active (this triggers OnEnable, but it will skip full prep)
+        if (!wasActive)
+        {
+            upgradeRoomObject.SetActive(true);
+        }
+        else
+        {
+            // If already active, manually call randomize
+            RandomizeUpgrades();
+        }
+
+        // Clear prewarm flag
+        isPrewarming = false;
+
+        // Deactivate if it wasn't originally active
+        if (!wasActive)
+        {
+            upgradeRoomObject.SetActive(false);
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log("Upgrade room prewarmed successfully!");
         }
     }
 
     void OnEnable()
     {
-        // Called when upgrade room is activated
+        // Make sure pool is initialized (safety check)
+        if (availableUpgrades.Count == 0)
+        {
+            InitializeUpgradePool();
+        }
+
+        // If this is prewarm, only randomize upgrades (skip disabling controls, cursor unlock, etc.)
+        if (isPrewarming)
+        {
+            RandomizeUpgrades();
+            return;
+        }
+
+        // Called when upgrade room is activated (for real)
         PrepareUpgradeRoom();
     }
 
@@ -209,7 +275,7 @@ public class UpgradeManager : MonoBehaviour
             continueButton.SetActive(false);
         }
 
-        // Randomize upgrades for the 3 buttons
+        // Randomize upgrades for the 3 buttons (even during prewarm)
         RandomizeUpgrades();
     }
 
