@@ -1,0 +1,428 @@
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections.Generic;
+
+public class UpgradeManager : MonoBehaviour
+{
+    [Header("Player References")]
+    [Tooltip("The player GameObject")]
+    public GameObject player;
+
+    [Tooltip("Player stats script (on player)")]
+    public PlayerStats playerStats;
+
+    [Tooltip("Player camera to disable during upgrades")]
+    public Camera playerCamera;
+
+    [Tooltip("Camera control script (MonoBehaviour) - drag your MouseLook or camera controller here")]
+    public MonoBehaviour cameraControlScript;
+
+    [Header("UI References")]
+    [Tooltip("The 3 upgrade choice buttons")]
+    public Button upgradeButton1;
+    public Button upgradeButton2;
+    public Button upgradeButton3;
+
+    [Tooltip("Continue button (already has onClick set up)")]
+    public GameObject continueButton;
+
+    [Header("Upgrade Button Images")]
+    [Tooltip("Sprite images for each upgrade type (assign in Inspector)")]
+    public Sprite moveSpeedSprite;
+    public Sprite maxSpeedSprite;
+    public Sprite accelerationSprite;
+    public Sprite slideBoostSprite;
+    public Sprite groundDragSprite;
+    public Sprite airDragSprite;
+    public Sprite jumpForceSprite;
+    public Sprite fireRateSprite;
+
+    [Header("Upgrade Values")]
+    [Tooltip("How much to increase each stat")]
+    public float moveSpeedIncrease = 5f;
+    public float maxSpeedIncrease = 10f;
+    public float accelerationIncrease = 5f;
+    public float slideBoostIncrease = 5f;
+    public float groundDragReduction = 0.5f;
+    public float airDragReduction = 0.1f;
+    public float jumpForceIncrease = 1f;
+    public float fireRateMultiplier = 0.9f; // 0.9 = 10% faster fire rate
+
+    [Header("Particle Effect (Optional)")]
+    [Tooltip("Particle effect to play when upgrade is selected")]
+    public GameObject upgradeParticleEffect;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    // Private variables
+    private List<UpgradeType> availableUpgrades = new List<UpgradeType>();
+    private UpgradeType selectedUpgrade1;
+    private UpgradeType selectedUpgrade2;
+    private UpgradeType selectedUpgrade3;
+    private bool hasSelectedUpgrade = false;
+
+    // Components to disable
+    private MomentumMovement movementScript;
+    private PlayerShooting shootingScript;
+
+    // Enum for upgrade types
+    public enum UpgradeType
+    {
+        MoveSpeed,
+        MaxSpeed,
+        Acceleration,
+        SlideBoost,
+        GroundDrag,
+        AirDrag,
+        JumpForce,
+        FireRate
+    }
+
+    void Start()
+    {
+        // Validate references
+        if (player == null)
+        {
+            Debug.LogError("UpgradeManager: Player not assigned!");
+            enabled = false;
+            return;
+        }
+
+        if (playerStats == null)
+        {
+            playerStats = player.GetComponent<PlayerStats>();
+            if (playerStats == null)
+            {
+                Debug.LogError("UpgradeManager: PlayerStats script not found on player!");
+                enabled = false;
+                return;
+            }
+        }
+
+        // Get player components
+        movementScript = player.GetComponent<MomentumMovement>();
+        shootingScript = player.GetComponent<PlayerShooting>();
+
+        if (movementScript == null || shootingScript == null)
+        {
+            Debug.LogError("UpgradeManager: Missing movement or shooting script on player!");
+            enabled = false;
+            return;
+        }
+
+        // Set up button listeners
+        if (upgradeButton1 != null)
+            upgradeButton1.onClick.AddListener(() => SelectUpgrade(1));
+
+        if (upgradeButton2 != null)
+            upgradeButton2.onClick.AddListener(() => SelectUpgrade(2));
+
+        if (upgradeButton3 != null)
+            upgradeButton3.onClick.AddListener(() => SelectUpgrade(3));
+
+        // Hide continue button initially
+        if (continueButton != null)
+        {
+            continueButton.SetActive(false);
+        }
+
+        // Initialize upgrade pool
+        InitializeUpgradePool();
+
+        if (showDebugInfo)
+        {
+            Debug.Log("UpgradeManager initialized!");
+        }
+    }
+
+    void OnEnable()
+    {
+        // Called when upgrade room is activated
+        PrepareUpgradeRoom();
+    }
+
+    void OnDisable()
+    {
+        // Called when leaving upgrade room
+        ReenablePlayerControls();
+    }
+
+    void InitializeUpgradePool()
+    {
+        // Add all upgrade types to the pool
+        availableUpgrades.Clear();
+        availableUpgrades.Add(UpgradeType.MoveSpeed);
+        availableUpgrades.Add(UpgradeType.MaxSpeed);
+        availableUpgrades.Add(UpgradeType.Acceleration);
+        availableUpgrades.Add(UpgradeType.SlideBoost);
+        availableUpgrades.Add(UpgradeType.GroundDrag);
+        availableUpgrades.Add(UpgradeType.AirDrag);
+        availableUpgrades.Add(UpgradeType.JumpForce);
+        availableUpgrades.Add(UpgradeType.FireRate);
+    }
+
+    void PrepareUpgradeRoom()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("=== UPGRADE ROOM ENTERED ===");
+        }
+
+        // Disable player controls
+        if (movementScript != null)
+        {
+            movementScript.enabled = false;
+        }
+
+        if (shootingScript != null)
+        {
+            shootingScript.enabled = false;
+        }
+
+        // Disable camera movement AND unlock cursor
+        if (cameraControlScript != null)
+        {
+            cameraControlScript.enabled = false;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"Disabled camera control: {cameraControlScript.GetType().Name}");
+            }
+        }
+
+        // Unlock and show cursor for UI interaction
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Reset selection state
+        hasSelectedUpgrade = false;
+
+        // Show upgrade buttons
+        if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(true);
+        if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(true);
+        if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(true);
+
+        // Hide continue button
+        if (continueButton != null)
+        {
+            continueButton.SetActive(false);
+        }
+
+        // Randomize upgrades for the 3 buttons
+        RandomizeUpgrades();
+    }
+
+    void ReenablePlayerControls()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Re-enabling player controls...");
+        }
+
+        // Re-enable player controls
+        if (movementScript != null)
+        {
+            movementScript.enabled = true;
+        }
+
+        if (shootingScript != null)
+        {
+            shootingScript.enabled = true;
+        }
+
+        // Re-enable camera
+        if (cameraControlScript != null)
+        {
+            cameraControlScript.enabled = true;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"Re-enabled camera control: {cameraControlScript.GetType().Name}");
+            }
+        }
+
+        // Lock cursor back for gameplay
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
+    void RandomizeUpgrades()
+    {
+        // Make sure we have at least 3 upgrades available
+        if (availableUpgrades.Count < 3)
+        {
+            Debug.LogError("UpgradeManager: Need at least 3 upgrade types! Only have " + availableUpgrades.Count);
+            return;
+        }
+
+        // Shuffle and pick 3 unique upgrades
+        List<UpgradeType> shuffled = new List<UpgradeType>(availableUpgrades);
+
+        // Fisher-Yates shuffle
+        for (int i = shuffled.Count - 1; i > 0; i--)
+        {
+            int randomIndex = Random.Range(0, i + 1);
+            UpgradeType temp = shuffled[i];
+            shuffled[i] = shuffled[randomIndex];
+            shuffled[randomIndex] = temp;
+        }
+
+        // Assign first 3 shuffled upgrades to buttons
+        selectedUpgrade1 = shuffled[0];
+        selectedUpgrade2 = shuffled[1];
+        selectedUpgrade3 = shuffled[2];
+
+        // Update button sprites
+        UpdateButtonSprite(upgradeButton1, selectedUpgrade1);
+        UpdateButtonSprite(upgradeButton2, selectedUpgrade2);
+        UpdateButtonSprite(upgradeButton3, selectedUpgrade3);
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Upgrades randomized: {selectedUpgrade1}, {selectedUpgrade2}, {selectedUpgrade3}");
+        }
+    }
+
+    void UpdateButtonSprite(Button button, UpgradeType upgradeType)
+    {
+        if (button == null) return;
+
+        Image buttonImage = button.GetComponent<Image>();
+        if (buttonImage == null) return;
+
+        // Assign sprite based on upgrade type
+        switch (upgradeType)
+        {
+            case UpgradeType.MoveSpeed:
+                if (moveSpeedSprite != null) buttonImage.sprite = moveSpeedSprite;
+                break;
+            case UpgradeType.MaxSpeed:
+                if (maxSpeedSprite != null) buttonImage.sprite = maxSpeedSprite;
+                break;
+            case UpgradeType.Acceleration:
+                if (accelerationSprite != null) buttonImage.sprite = accelerationSprite;
+                break;
+            case UpgradeType.SlideBoost:
+                if (slideBoostSprite != null) buttonImage.sprite = slideBoostSprite;
+                break;
+            case UpgradeType.GroundDrag:
+                if (groundDragSprite != null) buttonImage.sprite = groundDragSprite;
+                break;
+            case UpgradeType.AirDrag:
+                if (airDragSprite != null) buttonImage.sprite = airDragSprite;
+                break;
+            case UpgradeType.JumpForce:
+                if (jumpForceSprite != null) buttonImage.sprite = jumpForceSprite;
+                break;
+            case UpgradeType.FireRate:
+                if (fireRateSprite != null) buttonImage.sprite = fireRateSprite;
+                break;
+        }
+    }
+
+    void SelectUpgrade(int buttonNumber)
+    {
+        // Prevent multiple selections
+        if (hasSelectedUpgrade) return;
+
+        hasSelectedUpgrade = true;
+
+        // Determine which upgrade was selected
+        UpgradeType selectedUpgrade = UpgradeType.MoveSpeed; // Default
+
+        switch (buttonNumber)
+        {
+            case 1:
+                selectedUpgrade = selectedUpgrade1;
+                break;
+            case 2:
+                selectedUpgrade = selectedUpgrade2;
+                break;
+            case 3:
+                selectedUpgrade = selectedUpgrade3;
+                break;
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Player selected: {selectedUpgrade}");
+        }
+
+        // Apply the upgrade
+        ApplyUpgrade(selectedUpgrade);
+
+        // Play particle effect (optional)
+        if (upgradeParticleEffect != null && player != null)
+        {
+            Instantiate(upgradeParticleEffect, player.transform.position, Quaternion.identity);
+        }
+
+        // Hide upgrade buttons and show continue button
+        if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(false);
+        if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(false);
+        if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(false);
+
+        if (continueButton != null)
+        {
+            continueButton.SetActive(true);
+        }
+    }
+
+    void ApplyUpgrade(UpgradeType upgradeType)
+    {
+        if (playerStats == null) return;
+
+        switch (upgradeType)
+        {
+            case UpgradeType.MoveSpeed:
+                playerStats.AddMoveSpeed(moveSpeedIncrease);
+                if (showDebugInfo) Debug.Log($"Applied: Move Speed +{moveSpeedIncrease}");
+                break;
+
+            case UpgradeType.MaxSpeed:
+                playerStats.AddMaxSpeed(maxSpeedIncrease);
+                if (showDebugInfo) Debug.Log($"Applied: Max Speed +{maxSpeedIncrease}");
+                break;
+
+            case UpgradeType.Acceleration:
+                playerStats.AddAcceleration(accelerationIncrease);
+                if (showDebugInfo) Debug.Log($"Applied: Acceleration +{accelerationIncrease}");
+                break;
+
+            case UpgradeType.SlideBoost:
+                playerStats.AddSlideBoost(slideBoostIncrease);
+                if (showDebugInfo) Debug.Log($"Applied: Slide Boost +{slideBoostIncrease}");
+                break;
+
+            case UpgradeType.GroundDrag:
+                playerStats.ReduceGroundDrag(groundDragReduction);
+                if (showDebugInfo) Debug.Log($"Applied: Ground Drag -{groundDragReduction}");
+                break;
+
+            case UpgradeType.AirDrag:
+                playerStats.ReduceAirDrag(airDragReduction);
+                if (showDebugInfo) Debug.Log($"Applied: Air Drag -{airDragReduction}");
+                break;
+
+            case UpgradeType.JumpForce:
+                playerStats.AddJumpForce(jumpForceIncrease);
+                if (showDebugInfo) Debug.Log($"Applied: Jump Force +{jumpForceIncrease}");
+                break;
+
+            case UpgradeType.FireRate:
+                playerStats.ImproveFireRate(fireRateMultiplier);
+                if (showDebugInfo) Debug.Log($"Applied: Fire Rate x{fireRateMultiplier}");
+                break;
+        }
+    }
+
+    // Call this when player dies or starts a new run
+    public void ResetAllUpgrades()
+    {
+        if (playerStats != null)
+        {
+            playerStats.ResetUpgrades();
+        }
+    }
+}
