@@ -28,6 +28,10 @@ public class FloorWaveManager : MonoBehaviour
     [Range(1, 10)]
     public int minEnemiesPerWave = 3;
 
+    [Header("Global Player Spawn")]
+    [Tooltip("Global spawn point where player spawns for all maps")]
+    public GameObject globalPlayerSpawn;
+
     [Tooltip("Maximum enemies per wave")]
     [Range(1, 15)]
     public int maxEnemiesPerWave = 5;
@@ -49,6 +53,9 @@ public class FloorWaveManager : MonoBehaviour
 
     [Tooltip("Where to spawn player in upgrade room")]
     public Transform upgradeRoomPlayerSpawn;
+
+    [Tooltip("Platform/object to enable when upgrade room is disabled")]
+    public GameObject platformObject;
 
     [Header("Lobby")]
     [Tooltip("Lobby elevator trigger (for starting first floor from lobby)")]
@@ -96,10 +103,24 @@ public class FloorWaveManager : MonoBehaviour
             }
         }
 
+        // Validate global spawn point
+        if (globalPlayerSpawn == null)
+        {
+            Debug.LogError("Global Player Spawn not assigned! Assign an empty GameObject in scene.");
+            enabled = false;
+            return;
+        }
+
         // Make sure upgrade room starts disabled
         if (upgradeRoom != null)
         {
             upgradeRoom.SetActive(false);
+        }
+
+        // Make sure platform starts enabled
+        if (platformObject != null)
+        {
+            platformObject.SetActive(true);
         }
 
         Debug.Log("Floor Wave Manager initialized! Waiting in lobby...");
@@ -149,8 +170,8 @@ public class FloorWaveManager : MonoBehaviour
         // Spawn map
         yield return StartCoroutine(SpawnMapCoroutine());
 
-        // Teleport player
-        TeleportPlayerToSpawner();
+        // Teleport player to global spawn
+        TeleportPlayerToGlobalSpawn();
 
         // Wait then start first wave
         yield return new WaitForSeconds(1f);
@@ -205,7 +226,7 @@ public class FloorWaveManager : MonoBehaviour
         }
     }
 
-    void TeleportPlayerToSpawner()
+    void TeleportPlayerToGlobalSpawn()
     {
         if (player == null)
         {
@@ -213,65 +234,43 @@ public class FloorWaveManager : MonoBehaviour
             return;
         }
 
-        if (currentMap == null)
+        if (globalPlayerSpawn == null)
         {
-            Debug.LogError("Current map is null! Can't find spawn point.");
+            Debug.LogError("Global Player Spawn is null! Assign it in the Inspector.");
             return;
         }
 
-        // Find PlayerSpawner in current map's children
-        Transform[] allChildren = currentMap.GetComponentsInChildren<Transform>(true);
-        Transform spawner = null;
+        // Get player components
+        Rigidbody playerRb = player.GetComponent<Rigidbody>();
+        CharacterController playerCC = player.GetComponent<CharacterController>();
 
-        foreach (Transform child in allChildren)
+        // Disable CharacterController if exists (it can interfere with teleport)
+        if (playerCC != null)
         {
-            if (child.CompareTag("PlayerSpawner"))
-            {
-                spawner = child;
-                break;
-            }
+            playerCC.enabled = false;
         }
 
-        if (spawner != null)
+        // Reset physics
+        if (playerRb != null)
         {
-            // Get player components
-            Rigidbody playerRb = player.GetComponent<Rigidbody>();
-            CharacterController playerCC = player.GetComponent<CharacterController>();
-
-            // Disable CharacterController if exists (it can interfere with teleport)
-            if (playerCC != null)
-            {
-                playerCC.enabled = false;
-            }
-
-            // Reset physics
-            if (playerRb != null)
-            {
-                playerRb.linearVelocity = Vector3.zero;
-                playerRb.angularVelocity = Vector3.zero;
-            }
-
-            // Teleport player - use a position slightly above spawner to prevent clipping
-            Vector3 teleportPos = spawner.position + Vector3.up * 0.5f;
-            player.transform.position = teleportPos;
-            player.transform.rotation = spawner.rotation;
-
-            // Re-enable CharacterController
-            if (playerCC != null)
-            {
-                playerCC.enabled = true;
-            }
-
-            if (showDebugInfo)
-            {
-                Debug.Log($"Player teleported to {spawner.name} at position {teleportPos}");
-                Debug.Log($"Player actual position after teleport: {player.transform.position}");
-            }
+            playerRb.linearVelocity = Vector3.zero;
+            playerRb.angularVelocity = Vector3.zero;
         }
-        else
+
+        // Teleport player to global spawn point
+        player.transform.position = globalPlayerSpawn.transform.position;
+        player.transform.rotation = globalPlayerSpawn.transform.rotation;
+
+        // Re-enable CharacterController
+        if (playerCC != null)
         {
-            Debug.LogError($"No PlayerSpawner found in map '{currentMap.name}'! Tag player spawn point as 'PlayerSpawner'");
-            Debug.LogError($"Searched {allChildren.Length} children in the map.");
+            playerCC.enabled = true;
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Player teleported to Global Spawn at position {globalPlayerSpawn.transform.position}");
+            Debug.Log($"Player actual position after teleport: {player.transform.position}");
         }
     }
 
@@ -568,8 +567,8 @@ public class FloorWaveManager : MonoBehaviour
         // Step 3: Wait a tiny bit for upgrade room to fully disable
         yield return new WaitForSeconds(0.1f);
 
-        // Step 4: Teleport player to new map
-        TeleportPlayerToSpawner();
+        // Step 4: Teleport player to global spawn
+        TeleportPlayerToGlobalSpawn();
 
         // Step 5: Wait a bit, then start waves
         yield return new WaitForSeconds(0.5f);
@@ -587,6 +586,6 @@ public class FloorWaveManager : MonoBehaviour
     public void ForceTeleportPlayer()
     {
         Debug.Log("FORCE TELEPORT called!");
-        TeleportPlayerToSpawner();
+        TeleportPlayerToGlobalSpawn();
     }
 }
