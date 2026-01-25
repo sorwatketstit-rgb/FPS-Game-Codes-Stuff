@@ -3,8 +3,15 @@ using UnityEngine;
 [RequireComponent(typeof(Collider))]
 public class ElevatorTrigger : MonoBehaviour
 {
+    [Header("Settings")]
+    [Tooltip("Cooldown before elevator can be triggered again (prevents double triggers)")]
+    public float triggerCooldown = 1f;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
     private FloorWaveManager manager;
-    private bool hasTriggered = false;
+    private float lastTriggerTime = -999f;
 
     void Start()
     {
@@ -14,21 +21,45 @@ public class ElevatorTrigger : MonoBehaviour
         {
             col.isTrigger = true;
         }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"ElevatorTrigger initialized on {gameObject.name}");
+        }
     }
 
     public void SetManager(FloorWaveManager floorManager)
     {
         manager = floorManager;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"ElevatorTrigger: Manager set on {gameObject.name}");
+        }
     }
 
     void OnTriggerEnter(Collider other)
     {
-        // Check if player entered
-        if (!hasTriggered && other.CompareTag("Player"))
+        // Check if enough time has passed since last trigger
+        if (Time.time - lastTriggerTime < triggerCooldown)
         {
-            hasTriggered = true;
+            if (showDebugInfo)
+            {
+                Debug.Log($"Elevator cooldown active. Wait {triggerCooldown - (Time.time - lastTriggerTime):F2}s");
+            }
+            return;
+        }
 
-            Debug.Log("Player entered elevator!");
+        // Check if player entered
+        if (other.CompareTag("Player"))
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"Player entered elevator: {gameObject.name}");
+            }
+
+            // Update last trigger time
+            lastTriggerTime = Time.time;
 
             // Notify manager
             if (manager != null)
@@ -37,8 +68,18 @@ public class ElevatorTrigger : MonoBehaviour
             }
             else
             {
-                Debug.LogError("ElevatorTrigger: No manager reference set!");
+                Debug.LogError($"ElevatorTrigger ({gameObject.name}): No manager reference set!");
             }
+        }
+    }
+
+    // Debug method - manually trigger the elevator
+    public void ManualTrigger()
+    {
+        if (manager != null)
+        {
+            Debug.Log("Manual elevator trigger!");
+            manager.OnPlayerEnterElevator();
         }
     }
 }
