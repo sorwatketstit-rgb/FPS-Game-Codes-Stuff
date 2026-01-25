@@ -1,0 +1,185 @@
+using UnityEngine;
+
+public class PlayerStats : MonoBehaviour
+{
+    [Header("References")]
+    [Tooltip("The player's movement script")]
+    public MomentumMovement movementScript;
+
+    [Tooltip("The player's shooting script")]
+    public PlayerShooting shootingScript;
+
+    [Header("Current Upgrade Bonuses")]
+    [Tooltip("These values are added to the base stats")]
+    public float moveSpeedBonus = 0f;
+    public float maxSpeedBonus = 0f;
+    public float accelerationBonus = 0f;
+    public float slideBoostBonus = 0f;
+    public float groundDragReduction = 0f;
+    public float airDragReduction = 0f;
+    public float jumpForceBonus = 0f;
+
+    [Tooltip("Fire rate multiplier (lower = faster). 1.0 = normal, 0.5 = twice as fast")]
+    public float fireRateMultiplier = 1f;
+
+    [Header("Base Values (Set Automatically)")]
+    [Tooltip("Stored when the run starts")]
+    public float baseMoveSpeed;
+    public float baseMaxSpeed;
+    public float baseAcceleration;
+    public float baseSlideBoost;
+    public float baseGroundDrag;
+    public float baseAirDrag;
+    public float baseJumpForce;
+    public float baseFireRate;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    void Start()
+    {
+        // Find scripts if not assigned
+        if (movementScript == null)
+        {
+            movementScript = GetComponent<MomentumMovement>();
+        }
+
+        if (shootingScript == null)
+        {
+            shootingScript = GetComponent<PlayerShooting>();
+        }
+
+        // Validate
+        if (movementScript == null || shootingScript == null)
+        {
+            Debug.LogError("PlayerStats: Missing movement or shooting script references!");
+            enabled = false;
+            return;
+        }
+
+        // Store base values from the scripts
+        StoreBaseValues();
+
+        if (showDebugInfo)
+        {
+            Debug.Log("PlayerStats initialized! Base values stored.");
+        }
+    }
+
+    void StoreBaseValues()
+    {
+        // Store original values from MomentumMovement
+        baseMoveSpeed = movementScript.moveSpeed;
+        baseMaxSpeed = movementScript.maxSpeed;
+        baseAcceleration = movementScript.acceleration;
+        baseSlideBoost = movementScript.slideBoost;
+        baseGroundDrag = movementScript.groundDrag;
+        baseAirDrag = movementScript.airDrag;
+        baseJumpForce = movementScript.jumpForce;
+
+        // Store original fire rate from PlayerShooting
+        baseFireRate = shootingScript.fireRate;
+    }
+
+    /// <summary>
+    /// Apply all current bonuses to the player scripts
+    /// </summary>
+    public void ApplyAllUpgrades()
+    {
+        // Movement stats
+        movementScript.moveSpeed = baseMoveSpeed + moveSpeedBonus;
+        movementScript.maxSpeed = baseMaxSpeed + maxSpeedBonus;
+        movementScript.acceleration = baseAcceleration + accelerationBonus;
+        movementScript.slideBoost = baseSlideBoost + slideBoostBonus;
+        movementScript.jumpForce = baseJumpForce + jumpForceBonus;
+
+        // Drag reductions
+        movementScript.groundDrag = Mathf.Max(0f, baseGroundDrag - groundDragReduction);
+        movementScript.airDrag = Mathf.Max(0f, baseAirDrag - airDragReduction);
+
+        // Shooting stats
+        shootingScript.fireRate = baseFireRate * fireRateMultiplier;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Applied upgrades! MoveSpeed: {movementScript.moveSpeed}, FireRate: {shootingScript.fireRate}");
+        }
+    }
+
+    /// <summary>
+    /// Reset all upgrades (call this when starting a new run)
+    /// </summary>
+    public void ResetUpgrades()
+    {
+        moveSpeedBonus = 0f;
+        maxSpeedBonus = 0f;
+        accelerationBonus = 0f;
+        slideBoostBonus = 0f;
+        groundDragReduction = 0f;
+        airDragReduction = 0f;
+        jumpForceBonus = 0f;
+        fireRateMultiplier = 1f;
+
+        ApplyAllUpgrades();
+
+        if (showDebugInfo)
+        {
+            Debug.Log("All upgrades reset to base values!");
+        }
+    }
+
+    // ========== UPGRADE METHODS ==========
+    // These are called by UpgradeManager when player selects an upgrade
+
+    public void AddMoveSpeed(float amount)
+    {
+        moveSpeedBonus += amount;
+        ApplyAllUpgrades();
+    }
+
+    public void AddMaxSpeed(float amount)
+    {
+        maxSpeedBonus += amount;
+        ApplyAllUpgrades();
+    }
+
+    public void AddAcceleration(float amount)
+    {
+        accelerationBonus += amount;
+        ApplyAllUpgrades();
+    }
+
+    public void AddSlideBoost(float amount)
+    {
+        slideBoostBonus += amount;
+        ApplyAllUpgrades();
+    }
+
+    public void ReduceGroundDrag(float amount)
+    {
+        groundDragReduction += amount;
+        ApplyAllUpgrades();
+    }
+
+    public void ReduceAirDrag(float amount)
+    {
+        airDragReduction += amount;
+        ApplyAllUpgrades();
+    }
+
+    public void AddJumpForce(float amount)
+    {
+        jumpForceBonus += amount;
+        ApplyAllUpgrades();
+    }
+
+    public void ImproveFireRate(float multiplier)
+    {
+        fireRateMultiplier *= multiplier;
+        ApplyAllUpgrades();
+    }
+
+    // Public getters
+    public float GetCurrentMoveSpeed() => movementScript.moveSpeed;
+    public float GetCurrentFireRate() => shootingScript.fireRate;
+}
