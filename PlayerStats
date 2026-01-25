@@ -97,8 +97,8 @@ public class PlayerStats : MonoBehaviour
         movementScript.groundDrag = Mathf.Max(0f, baseGroundDrag - groundDragReduction);
         movementScript.airDrag = Mathf.Max(0f, baseAirDrag - airDragReduction);
 
-        // Shooting stats
-        shootingScript.fireRate = baseFireRate * fireRateMultiplier;
+        // Shooting stats - clamp to prevent going to 0
+        shootingScript.fireRate = Mathf.Max(0.00001f, baseFireRate * fireRateMultiplier);
 
         if (showDebugInfo)
         {
@@ -175,7 +175,17 @@ public class PlayerStats : MonoBehaviour
 
     public void ImproveFireRate(float multiplier)
     {
+        // Fire rate works inversely: lower value = faster shooting
+        // Multiply by value less than 1.0 to decrease fire rate time
         fireRateMultiplier *= multiplier;
+
+        // Prevent fire rate from going to 0 or negative
+        // Clamp to minimum of 0.00001
+        if (fireRateMultiplier < 0.00001f)
+        {
+            fireRateMultiplier = 0.00001f;
+        }
+
         ApplyAllUpgrades();
     }
 
