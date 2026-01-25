@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 public class ModernFPSCamera : MonoBehaviour
 {
@@ -36,11 +37,12 @@ public class ModernFPSCamera : MonoBehaviour
 
     private float xRotation = 0f;
     private float yRotation = 0f;
-
     private float modelBobTimer = 0f;
     private Vector3 modelStartLocalPos;
-
     private Rigidbody playerRb;
+    
+    // Teleport handling
+    private bool cameraPaused = false;
 
     void Start()
     {
@@ -87,7 +89,10 @@ public class ModernFPSCamera : MonoBehaviour
     void LateUpdate()
     {
         // Keep camera synced to player AFTER physics (prevents jitter)
-        UpdateCameraPosition();
+        if (!cameraPaused)
+        {
+            UpdateCameraPosition();
+        }
 
         // Handle visual model bobbing
         HandleModelBobbing();
@@ -111,8 +116,6 @@ public class ModernFPSCamera : MonoBehaviour
 
     void UpdateCameraPosition()
     {
-        // Explicitly set camera position to player + offset
-        // Done in LateUpdate to avoid Rigidbody jitter
         cameraHolder.position = player.position + cameraOffset;
     }
 
@@ -172,5 +175,18 @@ public class ModernFPSCamera : MonoBehaviour
     public void SetSensitivity(float sensitivity)
     {
         mouseSensitivity = Mathf.Clamp(sensitivity, 1f, 1000f);
+    }
+    
+    // Public method to pause camera updates during teleport
+    public void PauseCameraUpdate(float duration)
+    {
+        StartCoroutine(PauseCameraCoroutine(duration));
+    }
+    
+    IEnumerator PauseCameraCoroutine(float duration)
+    {
+        cameraPaused = true;
+        yield return new WaitForSeconds(duration);
+        cameraPaused = false;
     }
 }
