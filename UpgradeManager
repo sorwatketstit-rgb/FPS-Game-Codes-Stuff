@@ -286,38 +286,58 @@ public class UpgradeManager : MonoBehaviour
 
     void UpdateButtonSprite(Button button, UpgradeType upgradeType)
     {
-        if (button == null) return;
+        if (button == null)
+        {
+            if (showDebugInfo) Debug.LogWarning("UpdateButtonSprite: Button is null!");
+            return;
+        }
 
         Image buttonImage = button.GetComponent<Image>();
-        if (buttonImage == null) return;
+        if (buttonImage == null)
+        {
+            if (showDebugInfo) Debug.LogWarning($"UpdateButtonSprite: No Image component on button {button.name}!");
+            return;
+        }
 
         // Assign sprite based on upgrade type
+        Sprite spriteToAssign = null;
+
         switch (upgradeType)
         {
             case UpgradeType.MoveSpeed:
-                if (moveSpeedSprite != null) buttonImage.sprite = moveSpeedSprite;
+                spriteToAssign = moveSpeedSprite;
                 break;
             case UpgradeType.MaxSpeed:
-                if (maxSpeedSprite != null) buttonImage.sprite = maxSpeedSprite;
+                spriteToAssign = maxSpeedSprite;
                 break;
             case UpgradeType.Acceleration:
-                if (accelerationSprite != null) buttonImage.sprite = accelerationSprite;
+                spriteToAssign = accelerationSprite;
                 break;
             case UpgradeType.SlideBoost:
-                if (slideBoostSprite != null) buttonImage.sprite = slideBoostSprite;
+                spriteToAssign = slideBoostSprite;
                 break;
             case UpgradeType.GroundDrag:
-                if (groundDragSprite != null) buttonImage.sprite = groundDragSprite;
+                spriteToAssign = groundDragSprite;
                 break;
             case UpgradeType.AirDrag:
-                if (airDragSprite != null) buttonImage.sprite = airDragSprite;
+                spriteToAssign = airDragSprite;
                 break;
             case UpgradeType.JumpForce:
-                if (jumpForceSprite != null) buttonImage.sprite = jumpForceSprite;
+                spriteToAssign = jumpForceSprite;
                 break;
             case UpgradeType.FireRate:
-                if (fireRateSprite != null) buttonImage.sprite = fireRateSprite;
+                spriteToAssign = fireRateSprite;
                 break;
+        }
+
+        if (spriteToAssign != null)
+        {
+            buttonImage.sprite = spriteToAssign;
+            if (showDebugInfo) Debug.Log($"Assigned {upgradeType} sprite to {button.name}");
+        }
+        else
+        {
+            if (showDebugInfo) Debug.LogWarning($"No sprite assigned for {upgradeType}! Button will show default/previous sprite.");
         }
     }
 
