@@ -228,16 +228,21 @@ public class FloorWaveManager : MonoBehaviour
 
     void TeleportPlayerToGlobalSpawn()
     {
+        StartCoroutine(TeleportPlayerCoroutine());
+    }
+
+    IEnumerator TeleportPlayerCoroutine()
+    {
         if (player == null)
         {
             Debug.LogError("Player reference is null! Can't teleport.");
-            return;
+            yield break;
         }
 
         if (globalPlayerSpawn == null)
         {
             Debug.LogError("Global Player Spawn is null! Assign it in the Inspector.");
-            return;
+            yield break;
         }
 
         // Get player components
@@ -250,18 +255,37 @@ public class FloorWaveManager : MonoBehaviour
             playerCC.enabled = false;
         }
 
-        // Reset physics
+        // Reset physics BEFORE teleport
         if (playerRb != null)
         {
             playerRb.linearVelocity = Vector3.zero;
             playerRb.angularVelocity = Vector3.zero;
+            playerRb.Sleep(); // Force physics to reset
         }
 
-        // Teleport player to global spawn point
-        player.transform.position = globalPlayerSpawn.transform.position;
-        player.transform.rotation = globalPlayerSpawn.transform.rotation;
+        // Wait for physics to settle
+        yield return new WaitForFixedUpdate();
 
-        // Re-enable CharacterController
+        // Store target position/rotation
+        Vector3 targetPos = globalPlayerSpawn.transform.position;
+        Quaternion targetRot = globalPlayerSpawn.transform.rotation;
+
+        // Teleport player
+        player.transform.position = targetPos;
+        player.transform.rotation = targetRot;
+
+        // Wake rigidbody and force position update
+        if (playerRb != null)
+        {
+            playerRb.WakeUp();
+            playerRb.position = targetPos; // Force physics position sync
+            playerRb.rotation = targetRot;
+        }
+
+        // Wait another frame for position to apply
+        yield return new WaitForFixedUpdate();
+
+        // Re-enable CharacterController AFTER teleport
         if (playerCC != null)
         {
             playerCC.enabled = true;
@@ -269,8 +293,15 @@ public class FloorWaveManager : MonoBehaviour
 
         if (showDebugInfo)
         {
-            Debug.Log($"Player teleported to Global Spawn at position {globalPlayerSpawn.transform.position}");
+            Debug.Log($"Player teleported to Global Spawn at position {targetPos}");
             Debug.Log($"Player actual position after teleport: {player.transform.position}");
+
+            // Verify teleport worked
+            float distance = Vector3.Distance(player.transform.position, targetPos);
+            if (distance > 1f)
+            {
+                Debug.LogWarning($"Teleport verification failed! Player is {distance}m away from target!");
+            }
         }
     }
 
