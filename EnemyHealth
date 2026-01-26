@@ -3,89 +3,105 @@ using UnityEngine;
 public class EnemyHealth : MonoBehaviour
 {
     [Header("Health Settings")]
-    [Tooltip("Number of hits before enemy dies")]
-    [Range(1, 20)]
-    public int maxHits = 3;
+    [Tooltip("Enemy's current health")]
+    public int currentHealth = 3;
 
-    [Tooltip("Show hit counter in console")]
-    public bool showDebugInfo = true;
+    [Tooltip("Maximum health")]
+    public int maxHealth = 3;
 
-    [Header("Death Settings")]
-    [Tooltip("Delay before destroying object (for death effects)")]
-    [Range(0f, 2f)]
-    public float deathDelay = 0f;
-
-    [Tooltip("Optional: Effect to spawn on death")]
+    [Header("Death Effects (Optional)")]
+    [Tooltip("Particle effect to spawn on death")]
     public GameObject deathEffect;
 
-    // Current hit counter
-    private int currentHits = 0;
+    [Tooltip("Audio clip to play on death")]
+    public AudioClip deathSound;
+
+    [Tooltip("Audio source (will find one if not assigned)")]
+    public AudioSource audioSource;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
 
     void Start()
     {
-        // Validate setup
-        if (gameObject.layer != LayerMask.NameToLayer("Enemy"))
+        // Initialize health
+        currentHealth = maxHealth;
+
+        // Find audio source if not assigned
+        if (audioSource == null)
         {
-            Debug.LogWarning($"{gameObject.name} is not on 'Enemy' layer! It won't be detected by shooting system.");
+            audioSource = GetComponent<AudioSource>();
         }
     }
 
+    /// <summary>
+    /// Damage the enemy by a specified amount
+    /// </summary>
     public void TakeDamage(int damageAmount = 1)
     {
-        // Increase hit counter by damage amount
-        currentHits += damageAmount;
+        currentHealth -= damageAmount;
 
         if (showDebugInfo)
         {
-            Debug.Log($"{gameObject.name} hit for {damageAmount} damage! ({currentHits}/{maxHits})");
+            Debug.Log($"{gameObject.name} took {damageAmount} damage. Health: {currentHealth}/{maxHealth}");
         }
 
         // Check if dead
-        if (currentHits >= maxHits)
+        if (currentHealth <= 0)
         {
             Die();
         }
-        else
-        {
-            // Optional: Add hit reaction here (flash color, play sound, etc.)
-            OnHit();
-        }
-    }
-
-    void OnHit()
-    {
-        // Called when hit but not dead yet
-        // You can add visual/audio feedback here later
-        // Example: Flash red, play hurt sound, etc.
     }
 
     void Die()
     {
         if (showDebugInfo)
         {
-            Debug.Log($"{gameObject.name} DIED!");
+            Debug.Log($"{gameObject.name} died!");
         }
 
-        // Spawn death effect if assigned
+        // Award score to player
+        if (ScoreManager.Instance != null)
+        {
+            ScoreManager.Instance.AddKill();
+        }
+        else
+        {
+            Debug.LogWarning("ScoreManager not found! Enemy kill not counted.");
+        }
+
+        // Spawn death effect
         if (deathEffect != null)
         {
             Instantiate(deathEffect, transform.position, Quaternion.identity);
         }
 
-        // Destroy enemy
-        if (deathDelay > 0f)
+        // Play death sound
+        if (deathSound != null && audioSource != null)
         {
-            Destroy(gameObject, deathDelay);
+            // Play sound at position (so it's not destroyed immediately)
+            AudioSource.PlayClipAtPoint(deathSound, transform.position);
         }
-        else
+
+        // Destroy enemy
+        Destroy(gameObject);
+    }
+
+    /// <summary>
+    /// Heal the enemy
+    /// </summary>
+    public void Heal(int healAmount)
+    {
+        currentHealth = Mathf.Min(currentHealth + healAmount, maxHealth);
+
+        if (showDebugInfo)
         {
-            Destroy(gameObject);
+            Debug.Log($"{gameObject.name} healed {healAmount}. Health: {currentHealth}/{maxHealth}");
         }
     }
 
-    // Public getters for other scripts
-    public int GetCurrentHits() => currentHits;
-    public int GetMaxHits() => maxHits;
-    public float GetHealthPercentage() => 1f - ((float)currentHits / maxHits);
-    public bool IsDead() => currentHits >= maxHits;
+    // Public getters
+    public int GetCurrentHealth() => currentHealth;
+    public int GetMaxHealth() => maxHealth;
+    public float GetHealthPercent() => (float)currentHealth / maxHealth;
 }
