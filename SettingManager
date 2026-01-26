@@ -17,10 +17,6 @@ public class SettingsManager : MonoBehaviour
     [Tooltip("Shooting script (for zoom FOV)")]
     public PlayerShooting shootingScript;
 
-    [Header("Post Processing")]
-    [Tooltip("Volume for post-processing effects")]
-    public Volume postProcessVolume;
-
     [Header("UI Sliders")]
     [Tooltip("Slider for mouse sensitivity")]
     public Slider sensitivitySlider;
@@ -30,10 +26,6 @@ public class SettingsManager : MonoBehaviour
 
     [Tooltip("Slider for zoom FOV")]
     public Slider zoomFovSlider;
-
-    [Header("UI Toggles")]
-    [Tooltip("Toggle for post-processing effects")]
-    public Toggle postProcessingToggle;
 
     [Header("UI Text (Optional)")]
     [Tooltip("Text to display current sensitivity value (TextMeshPro)")]
@@ -49,33 +41,59 @@ public class SettingsManager : MonoBehaviour
     public float defaultSensitivity = 400f;
     public float defaultFOV = 60f;
     public float defaultZoomFOV = 30f;
-    public bool defaultPostProcessing = true;
 
     [Header("Debug")]
     public bool showDebugInfo = true;
 
     void Start()
     {
-        // Auto-find player references if not assigned (for game scene)
-        if (playerCamera == null)
+        // Configure slider ranges to prevent issues
+        ConfigureSliderRanges();
+
+        // ONLY set up listeners - don't touch camera/player at all
+        SetupListeners();
+
+        if (showDebugInfo)
         {
-            playerCamera = Camera.main;
+            Debug.Log("SettingsManager ready (passive mode)");
+        }
+    }
+
+    void ConfigureSliderRanges()
+    {
+        // Set sensitivity slider range (1 to 1000)
+        if (sensitivitySlider != null)
+        {
+            sensitivitySlider.minValue = 1f;
+            sensitivitySlider.maxValue = 1000f;
+            sensitivitySlider.wholeNumbers = true;
         }
 
-        if (cameraScript == null && playerCamera != null)
+        // Set FOV slider range (30 to 120) - CRITICAL: Don't let it go to 1!
+        if (fovSlider != null)
         {
-            cameraScript = playerCamera.GetComponent<ModernFPSCamera>();
+            fovSlider.minValue = 30f;
+            fovSlider.maxValue = 120f;
+            fovSlider.wholeNumbers = true;
         }
 
-        if (shootingScript == null)
+        // Set Zoom FOV slider range (INVERTED: 10 to 60, but slider shows opposite)
+        // Higher slider value = MORE zoom (LOWER FOV)
+        if (zoomFovSlider != null)
         {
-            shootingScript = FindFirstObjectByType<PlayerShooting>();
+            zoomFovSlider.minValue = 10f;  // Less zoom
+            zoomFovSlider.maxValue = 60f;  // More zoom
+            zoomFovSlider.wholeNumbers = true;
         }
 
-        // Load saved settings
-        LoadSettings();
+        if (showDebugInfo)
+        {
+            Debug.Log("Slider ranges configured: Sensitivity(1-1000), FOV(30-120), ZoomFOV(10-60 inverted)");
+        }
+    }
 
-        // Set up slider listeners
+    void SetupListeners()
+    {
         if (sensitivitySlider != null)
         {
             sensitivitySlider.onValueChanged.AddListener(OnSensitivityChanged);
@@ -91,43 +109,71 @@ public class SettingsManager : MonoBehaviour
             zoomFovSlider.onValueChanged.AddListener(OnZoomFOVChanged);
         }
 
-        if (postProcessingToggle != null)
-        {
-            postProcessingToggle.onValueChanged.AddListener(OnPostProcessingToggled);
-        }
+    }
 
-        // Apply current settings to UI
-        UpdateUI();
-
+    /// <summary>
+    /// Call this PUBLIC method when settings panel opens to refresh UI
+    /// </summary>
+    public void RefreshSettingsUI()
+    {
         if (showDebugInfo)
         {
-            Debug.Log("SettingsManager initialized!");
+            Debug.Log("Refreshing settings UI...");
+        }
+
+        // Find player references NOW (not on Start)
+        FindPlayerReferences();
+
+        // Update UI sliders to match CURRENT game values
+        UpdateUI();
+    }
+
+    /// <summary>
+    /// Reapply FOV setting (call when resuming game to prevent reset)
+    /// </summary>
+    public void RefreshCameraFOV()
+    {
+        if (playerCamera == null)
+        {
+            playerCamera = Camera.main;
+        }
+
+        if (playerCamera != null)
+        {
+            // Load saved FOV and apply it
+            float savedFOV = PlayerPrefs.GetFloat("FOV", defaultFOV);
+            playerCamera.fieldOfView = savedFOV;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"Refreshed camera FOV to {savedFOV}");
+            }
         }
     }
 
-    void LoadSettings()
+    void FindPlayerReferences()
     {
-        // Load from PlayerPrefs (persistent storage)
-        float sensitivity = PlayerPrefs.GetFloat("Sensitivity", defaultSensitivity);
-        float fov = PlayerPrefs.GetFloat("FOV", defaultFOV);
-        float zoomFov = PlayerPrefs.GetFloat("ZoomFOV", defaultZoomFOV);
-        bool postProcessing = PlayerPrefs.GetInt("PostProcessing", defaultPostProcessing ? 1 : 0) == 1;
-
-        // Apply settings (only if references exist - for main menu compatibility)
-        SetSensitivity(sensitivity);
-        SetFOV(fov);
-        SetZoomFOV(zoomFov);
-        SetPostProcessing(postProcessing);
-
-        if (showDebugInfo)
+        // Only find if not already assigned
+        if (playerCamera == null)
         {
-            Debug.Log($"Settings loaded: Sensitivity={sensitivity}, FOV={fov}, ZoomFOV={zoomFov}, PostProcess={postProcessing}");
+            playerCamera = Camera.main;
         }
+
+        if (cameraScript == null && playerCamera != null)
+        {
+            cameraScript = playerCamera.GetComponent<ModernFPSCamera>();
+        }
+
+        if (shootingScript == null)
+        {
+            shootingScript = FindFirstObjectByType<PlayerShooting>();
+        }
+
     }
 
     void SaveSettings()
     {
-        // Save to PlayerPrefs
+        // Save current values to PlayerPrefs
         if (cameraScript != null)
         {
             PlayerPrefs.SetFloat("Sensitivity", cameraScript.mouseSensitivity);
@@ -143,11 +189,6 @@ public class SettingsManager : MonoBehaviour
             PlayerPrefs.SetFloat("ZoomFOV", shootingScript.zoomFOV);
         }
 
-        if (postProcessVolume != null)
-        {
-            PlayerPrefs.SetInt("PostProcessing", postProcessVolume.enabled ? 1 : 0);
-        }
-
         PlayerPrefs.Save();
 
         if (showDebugInfo)
@@ -161,20 +202,23 @@ public class SettingsManager : MonoBehaviour
     void OnSensitivityChanged(float value)
     {
         SetSensitivity(value);
-        SaveSettings();
+
+        // Delayed save to prevent white flash
+        CancelInvoke("SaveSettings");
+        Invoke("SaveSettings", 0.5f);
     }
 
     void SetSensitivity(float value)
     {
+        // Clamp sensitivity to reasonable range
+        value = Mathf.Clamp(value, 1f, 1000f);
+
         if (cameraScript != null)
         {
             cameraScript.mouseSensitivity = value;
         }
 
-        if (sensitivityValueText != null)
-        {
-            sensitivityValueText.text = value.ToString("F0");
-        }
+        UpdateSensitivityText();
     }
 
     // ========== FIELD OF VIEW ==========
@@ -182,19 +226,27 @@ public class SettingsManager : MonoBehaviour
     void OnFOVChanged(float value)
     {
         SetFOV(value);
-        SaveSettings();
+
+        // Delayed save to prevent white flash
+        CancelInvoke("SaveSettings");
+        Invoke("SaveSettings", 0.5f);
     }
 
     void SetFOV(float value)
     {
+        // CRITICAL: Clamp FOV to safe range to prevent white screen
+        value = Mathf.Clamp(value, 30f, 120f);
+
         if (playerCamera != null)
         {
             playerCamera.fieldOfView = value;
         }
 
-        if (fovValueText != null)
+        UpdateFOVText();
+
+        if (showDebugInfo && value != playerCamera.fieldOfView)
         {
-            fovValueText.text = value.ToString("F0");
+            Debug.LogWarning($"FOV clamped from {playerCamera.fieldOfView} to {value} for safety");
         }
     }
 
@@ -202,43 +254,36 @@ public class SettingsManager : MonoBehaviour
 
     void OnZoomFOVChanged(float value)
     {
-        SetZoomFOV(value);
-        SaveSettings();
+        // INVERT: Higher slider value = MORE zoom (LOWER FOV)
+        // Map slider (10-60) to FOV (60-10)
+        float invertedValue = 70f - value; // 70 - 10 = 60, 70 - 60 = 10
+        SetZoomFOV(invertedValue);
+
+        // Delayed save to prevent white flash
+        CancelInvoke("SaveSettings");
+        Invoke("SaveSettings", 0.5f);
     }
 
     void SetZoomFOV(float value)
     {
+        // Clamp zoom FOV to reasonable range
+        value = Mathf.Clamp(value, 10f, 60f);
+
         if (shootingScript != null)
         {
             shootingScript.zoomFOV = value;
         }
 
-        if (zoomFovValueText != null)
-        {
-            zoomFovValueText.text = value.ToString("F0");
-        }
-    }
-
-    // ========== POST PROCESSING ==========
-
-    void OnPostProcessingToggled(bool isOn)
-    {
-        SetPostProcessing(isOn);
-        SaveSettings();
-    }
-
-    void SetPostProcessing(bool enabled)
-    {
-        if (postProcessVolume != null)
-        {
-            postProcessVolume.enabled = enabled;
-        }
+        UpdateZoomFOVText();
     }
 
     // ========== UI UPDATE ==========
 
     void UpdateUI()
     {
+        // Temporarily remove listeners to prevent triggering callbacks
+        RemoveListeners();
+
         // Update slider values to match current settings
         if (sensitivitySlider != null && cameraScript != null)
         {
@@ -250,30 +295,75 @@ public class SettingsManager : MonoBehaviour
             fovSlider.value = playerCamera.fieldOfView;
         }
 
+        // INVERTED ZOOM: If game has FOV 30 (high zoom), slider should show 40 (70-30=40)
         if (zoomFovSlider != null && shootingScript != null)
         {
-            zoomFovSlider.value = shootingScript.zoomFOV;
+            zoomFovSlider.value = 70f - shootingScript.zoomFOV;
         }
 
-        if (postProcessingToggle != null && postProcessVolume != null)
+        // Manually update text displays with current values
+        UpdateSensitivityText();
+        UpdateFOVText();
+        UpdateZoomFOVText();
+
+        // Re-add listeners
+        SetupListeners();
+    }
+
+    void RemoveListeners()
+    {
+        if (sensitivitySlider != null)
         {
-            postProcessingToggle.isOn = postProcessVolume.enabled;
+            sensitivitySlider.onValueChanged.RemoveAllListeners();
         }
 
-        // Update text displays
+        if (fovSlider != null)
+        {
+            fovSlider.onValueChanged.RemoveAllListeners();
+        }
+
+        if (zoomFovSlider != null)
+        {
+            zoomFovSlider.onValueChanged.RemoveAllListeners();
+        }
+    }
+
+    void UpdateSensitivityText()
+    {
         if (sensitivityValueText != null && cameraScript != null)
         {
             sensitivityValueText.text = cameraScript.mouseSensitivity.ToString("F0");
         }
+        else if (sensitivityValueText != null && sensitivitySlider != null)
+        {
+            // Fallback to slider value if camera not found
+            sensitivityValueText.text = sensitivitySlider.value.ToString("F0");
+        }
+    }
 
+    void UpdateFOVText()
+    {
         if (fovValueText != null && playerCamera != null)
         {
             fovValueText.text = playerCamera.fieldOfView.ToString("F0");
         }
+        else if (fovValueText != null && fovSlider != null)
+        {
+            // Fallback to slider value if camera not found
+            fovValueText.text = fovSlider.value.ToString("F0");
+        }
+    }
 
+    void UpdateZoomFOVText()
+    {
         if (zoomFovValueText != null && shootingScript != null)
         {
             zoomFovValueText.text = shootingScript.zoomFOV.ToString("F0");
+        }
+        else if (zoomFovValueText != null && zoomFovSlider != null)
+        {
+            // Fallback to slider value if shooting script not found
+            zoomFovValueText.text = zoomFovSlider.value.ToString("F0");
         }
     }
 
@@ -284,7 +374,6 @@ public class SettingsManager : MonoBehaviour
         SetSensitivity(defaultSensitivity);
         SetFOV(defaultFOV);
         SetZoomFOV(defaultZoomFOV);
-        SetPostProcessing(defaultPostProcessing);
 
         UpdateUI();
         SaveSettings();
