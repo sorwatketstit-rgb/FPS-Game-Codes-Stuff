@@ -11,9 +11,6 @@ public class PauseManager : MonoBehaviour
     [Tooltip("Settings panel (shows when Settings button is clicked)")]
     public GameObject settingsPanel;
 
-    [Tooltip("Main game UI canvas to hide when paused")]
-    public GameObject mainGameUI;
-
     [Header("Player References")]
     [Tooltip("Player movement script to disable when paused")]
     public MomentumMovement playerMovement;
@@ -45,8 +42,26 @@ public class PauseManager : MonoBehaviour
     // State
     private bool isPaused = false;
 
+    void OnEnable()
+    {
+        // CRITICAL: Make sure pause menu is hidden when script enables
+        // This prevents the white block issue on game start
+        if (pauseMenuUI != null)
+        {
+            pauseMenuUI.SetActive(false);
+        }
+
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
+    }
+
     void Start()
     {
+        // Ensure we start unpaused
+        isPaused = false;
+
         // Make sure pause menu starts hidden
         if (pauseMenuUI != null)
         {
@@ -87,10 +102,17 @@ public class PauseManager : MonoBehaviour
         // Check for pause input (Escape key)
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (isPaused)
+            // If settings panel is open, close it and return to pause menu
+            if (settingsPanel != null && settingsPanel.activeSelf)
+            {
+                OnBackFromSettingsPressed();
+            }
+            // If paused, resume game
+            else if (isPaused)
             {
                 ResumeGame();
             }
+            // If not paused, pause game
             else
             {
                 PauseGame();
@@ -137,12 +159,6 @@ public class PauseManager : MonoBehaviour
         if (playerCameraScript != null)
         {
             playerCameraScript.enabled = false;
-        }
-
-        // Hide main game UI
-        if (mainGameUI != null)
-        {
-            mainGameUI.SetActive(false);
         }
 
         // Hide crosshair
@@ -193,12 +209,6 @@ public class PauseManager : MonoBehaviour
         if (playerCameraScript != null)
         {
             playerCameraScript.enabled = true;
-        }
-
-        // Show main game UI
-        if (mainGameUI != null)
-        {
-            mainGameUI.SetActive(true);
         }
 
         // Show crosshair
