@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using TMPro;
 
 public class SettingsManager : MonoBehaviour
 {
@@ -35,14 +36,14 @@ public class SettingsManager : MonoBehaviour
     public Toggle postProcessingToggle;
 
     [Header("UI Text (Optional)")]
-    [Tooltip("Text to display current sensitivity value")]
-    public Text sensitivityValueText;
+    [Tooltip("Text to display current sensitivity value (TextMeshPro)")]
+    public TextMeshProUGUI sensitivityValueText;
 
-    [Tooltip("Text to display current FOV value")]
-    public Text fovValueText;
+    [Tooltip("Text to display current FOV value (TextMeshPro)")]
+    public TextMeshProUGUI fovValueText;
 
-    [Tooltip("Text to display current zoom FOV value")]
-    public Text zoomFovValueText;
+    [Tooltip("Text to display current zoom FOV value (TextMeshPro)")]
+    public TextMeshProUGUI zoomFovValueText;
 
     [Header("Default Values")]
     public float defaultSensitivity = 400f;
@@ -55,6 +56,22 @@ public class SettingsManager : MonoBehaviour
 
     void Start()
     {
+        // Auto-find player references if not assigned (for game scene)
+        if (playerCamera == null)
+        {
+            playerCamera = Camera.main;
+        }
+
+        if (cameraScript == null && playerCamera != null)
+        {
+            cameraScript = playerCamera.GetComponent<ModernFPSCamera>();
+        }
+
+        if (shootingScript == null)
+        {
+            shootingScript = FindFirstObjectByType<PlayerShooting>();
+        }
+
         // Load saved settings
         LoadSettings();
 
@@ -96,7 +113,7 @@ public class SettingsManager : MonoBehaviour
         float zoomFov = PlayerPrefs.GetFloat("ZoomFOV", defaultZoomFOV);
         bool postProcessing = PlayerPrefs.GetInt("PostProcessing", defaultPostProcessing ? 1 : 0) == 1;
 
-        // Apply settings
+        // Apply settings (only if references exist - for main menu compatibility)
         SetSensitivity(sensitivity);
         SetFOV(fov);
         SetZoomFOV(zoomFov);
