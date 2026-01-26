@@ -9,12 +9,6 @@ public class UpgradeManager : MonoBehaviour
     [Tooltip("The player GameObject")]
     public GameObject player;
 
-    [Tooltip("Player stats script (on player)")]
-    public PlayerStats playerStats;
-
-    [Tooltip("Player camera to disable during upgrades")]
-    public Camera playerCamera;
-
     [Tooltip("Camera control script - drag ModernFPSCamera here")]
     public ModernFPSCamera cameraControlScript;
 
@@ -30,6 +24,11 @@ public class UpgradeManager : MonoBehaviour
     [Tooltip("Continue button (already has onClick set up)")]
     public GameObject continueButton;
 
+    [Tooltip("Text labels for upgrade names (TextMeshPro) - Optional but recommended")]
+    public TMPro.TextMeshProUGUI upgradeText1;
+    public TMPro.TextMeshProUGUI upgradeText2;
+    public TMPro.TextMeshProUGUI upgradeText3;
+
     [Header("Upgrade Button Images")]
     [Tooltip("Sprite images for each upgrade type (assign in Inspector)")]
     public Sprite moveSpeedSprite;
@@ -41,16 +40,30 @@ public class UpgradeManager : MonoBehaviour
     public Sprite jumpForceSprite;
     public Sprite fireRateSprite;
 
-    [Header("Upgrade Values")]
-    [Tooltip("How much to increase each stat")]
-    public float moveSpeedIncrease = 5f;
-    public float maxSpeedIncrease = 10f;
-    public float accelerationIncrease = 5f;
-    public float slideBoostIncrease = 5f;
-    public float groundDragReduction = 0.5f;
-    public float airDragReduction = 0.1f;
-    public float jumpForceIncrease = 1f;
-    public float fireRateMultiplier = 0.9f; // 0.9 = 10% faster fire rate
+    [Header("Upgrade Values - SETS to fixed values (not additive)")]
+    [Tooltip("Move speed tiers - each upgrade picks next tier")]
+    public float[] moveSpeedTiers = { 35f, 40f, 45f, 50f, 55f };
+
+    [Tooltip("Max speed tiers")]
+    public float[] maxSpeedTiers = { 25f, 30f, 35f, 40f, 45f };
+
+    [Tooltip("Acceleration tiers")]
+    public float[] accelerationTiers = { 15f, 20f, 25f, 30f, 35f };
+
+    [Tooltip("Slide boost tiers")]
+    public float[] slideBoostTiers = { 10f, 15f, 20f, 25f, 30f };
+
+    [Tooltip("Ground drag tiers (lower = less drag, faster movement)")]
+    public float[] groundDragTiers = { 4f, 3f, 2f, 1f, 0.5f };
+
+    [Tooltip("Air drag tiers (lower = less drag, better air control)")]
+    public float[] airDragTiers = { 1.5f, 1f, 0.5f, 0.2f, 0.1f };
+
+    [Tooltip("Jump force tiers")]
+    public float[] jumpForceTiers = { 8f, 10f, 12f, 14f, 16f };
+
+    [Tooltip("Fire rate tiers (LOWER = FASTER: 0.05=fast, 0.01=very fast, 0.001=ultra fast)")]
+    public float[] fireRateTiers = { 0.05f, 0.01f, 0.001f };
 
     [Header("Particle Effect (Optional)")]
     [Tooltip("Particle effect to play when upgrade is selected")]
@@ -58,12 +71,24 @@ public class UpgradeManager : MonoBehaviour
 
     [Header("Debug")]
     public bool showDebugInfo = true;
+    [Tooltip("Show detailed sprite/button assignment logs (creates spam)")]
+    public bool showDetailedLogs = false;
 
     // Private variables
     private List<UpgradeType> availableUpgrades = new List<UpgradeType>();
     private UpgradeType selectedUpgrade1;
     private UpgradeType selectedUpgrade2;
     private UpgradeType selectedUpgrade3;
+
+    // Track how many times each upgrade has been picked
+    private int moveSpeedLevel = 0;
+    private int maxSpeedLevel = 0;
+    private int accelerationLevel = 0;
+    private int slideBoostLevel = 0;
+    private int groundDragLevel = 0;
+    private int airDragLevel = 0;
+    private int jumpForceLevel = 0;
+    private int fireRateLevel = 0;
     private bool hasSelectedUpgrade = false;
     private bool isPrewarming = false; // Track if we're prewarming
 
@@ -98,17 +123,6 @@ public class UpgradeManager : MonoBehaviour
             Debug.LogError("UpgradeManager: Player not assigned!");
             enabled = false;
             return;
-        }
-
-        if (playerStats == null)
-        {
-            playerStats = player.GetComponent<PlayerStats>();
-            if (playerStats == null)
-            {
-                Debug.LogError("UpgradeManager: PlayerStats script not found on player!");
-                enabled = false;
-                return;
-            }
         }
 
         // Get player components
@@ -224,6 +238,9 @@ public class UpgradeManager : MonoBehaviour
             InitializeUpgradePool();
         }
 
+        // Re-add button listeners (they might have been removed)
+        SetupButtonListeners();
+
         // If this is prewarm, only randomize upgrades (skip disabling controls, cursor unlock, etc.)
         if (isPrewarming)
         {
@@ -235,10 +252,50 @@ public class UpgradeManager : MonoBehaviour
         PrepareUpgradeRoom();
     }
 
+    void SetupButtonListeners()
+    {
+        if (upgradeButton1 != null)
+        {
+            upgradeButton1.onClick.RemoveAllListeners();
+            upgradeButton1.onClick.AddListener(() => SelectUpgrade(1));
+        }
+
+        if (upgradeButton2 != null)
+        {
+            upgradeButton2.onClick.RemoveAllListeners();
+            upgradeButton2.onClick.AddListener(() => SelectUpgrade(2));
+        }
+
+        if (upgradeButton3 != null)
+        {
+            upgradeButton3.onClick.RemoveAllListeners();
+            upgradeButton3.onClick.AddListener(() => SelectUpgrade(3));
+        }
+
+        if (showDetailedLogs)
+        {
+            Debug.Log("Button listeners set up!");
+        }
+    }
+
     void OnDisable()
     {
         // Called when leaving upgrade room
         ReenablePlayerControls();
+
+        // Clear button listeners to prevent memory leaks
+        if (upgradeButton1 != null)
+        {
+            upgradeButton1.onClick.RemoveAllListeners();
+        }
+        if (upgradeButton2 != null)
+        {
+            upgradeButton2.onClick.RemoveAllListeners();
+        }
+        if (upgradeButton3 != null)
+        {
+            upgradeButton3.onClick.RemoveAllListeners();
+        }
     }
 
     void InitializeUpgradePool()
@@ -309,10 +366,25 @@ public class UpgradeManager : MonoBehaviour
         // Reset selection state
         hasSelectedUpgrade = false;
 
+        if (showDebugInfo)
+        {
+            Debug.Log($"hasSelectedUpgrade reset to FALSE - buttons should work now!");
+        }
+
         // Show upgrade buttons
         if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(true);
         if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(true);
         if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(true);
+
+        // Show Texts
+        if (upgradeText1 != null) upgradeText1.gameObject.SetActive(true);
+        if (upgradeText2 != null) upgradeText2.gameObject.SetActive(true);
+        if (upgradeText3 != null) upgradeText3.gameObject.SetActive(true);
+
+        if (showDebugInfo)
+        {
+            Debug.Log("Upgrade buttons set to ACTIVE");
+        };
 
         // Hide continue button
         if (continueButton != null)
@@ -395,6 +467,17 @@ public class UpgradeManager : MonoBehaviour
         UpdateButtonSprite(upgradeButton2, selectedUpgrade2);
         UpdateButtonSprite(upgradeButton3, selectedUpgrade3);
 
+        // Update text labels
+        UpdateButtonText(upgradeText1, selectedUpgrade1);
+        UpdateButtonText(upgradeText2, selectedUpgrade2);
+        UpdateButtonText(upgradeText3, selectedUpgrade3);
+
+        // Warn once if all sprites are the same (only check after all buttons updated)
+        if (showDebugInfo && moveSpeedSprite != null && moveSpeedSprite == maxSpeedSprite && maxSpeedSprite == accelerationSprite)
+        {
+            Debug.LogWarning("WARNING: All upgrade sprites appear to be the same! Assign unique sprites for each upgrade type in UpgradeManager Inspector.");
+        }
+
         if (showDebugInfo)
         {
             Debug.Log($"Upgrades randomized: {selectedUpgrade1}, {selectedUpgrade2}, {selectedUpgrade3}");
@@ -450,15 +533,9 @@ public class UpgradeManager : MonoBehaviour
         if (spriteToAssign != null)
         {
             buttonImage.sprite = spriteToAssign;
-            if (showDebugInfo)
+            if (showDetailedLogs) // Changed from showDebugInfo
             {
                 Debug.Log($"Button {button.name}: Assigned {upgradeType} sprite (Sprite name: '{spriteToAssign.name}')");
-
-                // Warn if all sprites are the same
-                if (moveSpeedSprite == maxSpeedSprite && maxSpeedSprite == accelerationSprite)
-                {
-                    Debug.LogWarning("WARNING: All upgrade sprites appear to be the same! This may confuse players. Assign unique sprites for each upgrade type in UpgradeManager Inspector.");
-                }
             }
         }
         else
@@ -521,6 +598,9 @@ public class UpgradeManager : MonoBehaviour
         if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(false);
         if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(false);
         if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(false);
+        if (upgradeText1 != null) upgradeText1.gameObject.SetActive(false);
+        if (upgradeText2 != null) upgradeText2.gameObject.SetActive(false);
+        if (upgradeText3 != null) upgradeText3.gameObject.SetActive(false);
 
         if (continueButton != null)
         {
@@ -533,50 +613,132 @@ public class UpgradeManager : MonoBehaviour
         }
     }
 
-    void ApplyUpgrade(UpgradeType upgradeType)
+    void UpdateButtonText(TMPro.TextMeshProUGUI textLabel, UpgradeType upgradeType)
     {
-        if (playerStats == null) return;
+        if (textLabel == null) return; // Text labels are optional
+
+        string upgradeName = "";
+        string upgradeDesc = "";
 
         switch (upgradeType)
         {
             case UpgradeType.MoveSpeed:
-                playerStats.AddMoveSpeed(moveSpeedIncrease);
-                if (showDebugInfo) Debug.Log($"Applied: Move Speed +{moveSpeedIncrease}");
+                upgradeName = "Movement Speed";
+                upgradeDesc = moveSpeedLevel < moveSpeedTiers.Length ? $" > {moveSpeedTiers[moveSpeedLevel]}" : "(MAX)";
+                break;
+            case UpgradeType.MaxSpeed:
+                upgradeName = "Max Speed";
+                upgradeDesc = maxSpeedLevel < maxSpeedTiers.Length ? $" > {maxSpeedTiers[maxSpeedLevel]}" : "(MAX)";
+                break;
+            case UpgradeType.Acceleration:
+                upgradeName = "Acceleration";
+                upgradeDesc = accelerationLevel < accelerationTiers.Length ? $" > {accelerationTiers[accelerationLevel]}" : "(MAX)";
+                break;
+            case UpgradeType.SlideBoost:
+                upgradeName = "Slide Boost";
+                upgradeDesc = slideBoostLevel < slideBoostTiers.Length ? $" > {slideBoostTiers[slideBoostLevel]}" : "(MAX)";
+                break;
+            case UpgradeType.GroundDrag:
+                upgradeName = "Ground Friction";
+                upgradeDesc = groundDragLevel < groundDragTiers.Length ? $" > {groundDragTiers[groundDragLevel]}" : "(MAX)";
+                break;
+            case UpgradeType.AirDrag:
+                upgradeName = "Air Control";
+                upgradeDesc = airDragLevel < airDragTiers.Length ? $" > {airDragTiers[airDragLevel]}" : "(MAX)";
+                break;
+            case UpgradeType.JumpForce:
+                upgradeName = "Jump Height";
+                upgradeDesc = jumpForceLevel < jumpForceTiers.Length ? $" > {jumpForceTiers[jumpForceLevel]}" : "(MAX)";
+                break;
+            case UpgradeType.FireRate:
+                upgradeName = "Fire Rate";
+                upgradeDesc = fireRateLevel < fireRateTiers.Length ? $" > {fireRateTiers[fireRateLevel]}s" : "(MAX)";
+                break;
+        }
+
+        textLabel.text = $"{upgradeName}\n{upgradeDesc}";
+    }
+
+    void ApplyUpgrade(UpgradeType upgradeType)
+    {
+        if (movementScript == null || shootingScript == null) return;
+
+        switch (upgradeType)
+        {
+            case UpgradeType.MoveSpeed:
+                if (moveSpeedLevel < moveSpeedTiers.Length)
+                {
+                    movementScript.moveSpeed = moveSpeedTiers[moveSpeedLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Move Speed SET to {moveSpeedTiers[moveSpeedLevel]} (Level {moveSpeedLevel + 1})");
+                    moveSpeedLevel++;
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Move Speed already at max level!");
+                }
                 break;
 
             case UpgradeType.MaxSpeed:
-                playerStats.AddMaxSpeed(maxSpeedIncrease);
-                if (showDebugInfo) Debug.Log($"Applied: Max Speed +{maxSpeedIncrease}");
+                if (maxSpeedLevel < maxSpeedTiers.Length)
+                {
+                    movementScript.maxSpeed = maxSpeedTiers[maxSpeedLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Max Speed SET to {maxSpeedTiers[maxSpeedLevel]} (Level {maxSpeedLevel + 1})");
+                    maxSpeedLevel++;
+                }
                 break;
 
             case UpgradeType.Acceleration:
-                playerStats.AddAcceleration(accelerationIncrease);
-                if (showDebugInfo) Debug.Log($"Applied: Acceleration +{accelerationIncrease}");
+                if (accelerationLevel < accelerationTiers.Length)
+                {
+                    movementScript.acceleration = accelerationTiers[accelerationLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Acceleration SET to {accelerationTiers[accelerationLevel]} (Level {accelerationLevel + 1})");
+                    accelerationLevel++;
+                }
                 break;
 
             case UpgradeType.SlideBoost:
-                playerStats.AddSlideBoost(slideBoostIncrease);
-                if (showDebugInfo) Debug.Log($"Applied: Slide Boost +{slideBoostIncrease}");
+                if (slideBoostLevel < slideBoostTiers.Length)
+                {
+                    movementScript.slideBoost = slideBoostTiers[slideBoostLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Slide Boost SET to {slideBoostTiers[slideBoostLevel]} (Level {slideBoostLevel + 1})");
+                    slideBoostLevel++;
+                }
                 break;
 
             case UpgradeType.GroundDrag:
-                playerStats.ReduceGroundDrag(groundDragReduction);
-                if (showDebugInfo) Debug.Log($"Applied: Ground Drag -{groundDragReduction}");
+                if (groundDragLevel < groundDragTiers.Length)
+                {
+                    movementScript.groundDrag = groundDragTiers[groundDragLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Ground Drag SET to {groundDragTiers[groundDragLevel]} (Level {groundDragLevel + 1})");
+                    groundDragLevel++;
+                }
                 break;
 
             case UpgradeType.AirDrag:
-                playerStats.ReduceAirDrag(airDragReduction);
-                if (showDebugInfo) Debug.Log($"Applied: Air Drag -{airDragReduction}");
+                if (airDragLevel < airDragTiers.Length)
+                {
+                    movementScript.airDrag = airDragTiers[airDragLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Air Drag SET to {airDragTiers[airDragLevel]} (Level {airDragLevel + 1})");
+                    airDragLevel++;
+                }
                 break;
 
             case UpgradeType.JumpForce:
-                playerStats.AddJumpForce(jumpForceIncrease);
-                if (showDebugInfo) Debug.Log($"Applied: Jump Force +{jumpForceIncrease}");
+                if (jumpForceLevel < jumpForceTiers.Length)
+                {
+                    movementScript.jumpForce = jumpForceTiers[jumpForceLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Jump Force SET to {jumpForceTiers[jumpForceLevel]} (Level {jumpForceLevel + 1})");
+                    jumpForceLevel++;
+                }
                 break;
 
             case UpgradeType.FireRate:
-                playerStats.ImproveFireRate(fireRateMultiplier);
-                if (showDebugInfo) Debug.Log($"Applied: Fire Rate x{fireRateMultiplier}");
+                if (fireRateLevel < fireRateTiers.Length)
+                {
+                    shootingScript.fireRate = fireRateTiers[fireRateLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Fire Rate SET to {fireRateTiers[fireRateLevel]} (Level {fireRateLevel + 1}) - FASTER SHOOTING!");
+                    fireRateLevel++;
+                }
                 break;
         }
     }
@@ -584,9 +746,19 @@ public class UpgradeManager : MonoBehaviour
     // Call this when player dies or starts a new run
     public void ResetAllUpgrades()
     {
-        if (playerStats != null)
+        // Reset all upgrade levels
+        moveSpeedLevel = 0;
+        maxSpeedLevel = 0;
+        accelerationLevel = 0;
+        slideBoostLevel = 0;
+        groundDragLevel = 0;
+        airDragLevel = 0;
+        jumpForceLevel = 0;
+        fireRateLevel = 0;
+
+        if (showDebugInfo)
         {
-            playerStats.ResetUpgrades();
+            Debug.Log("All upgrade levels reset to 0!");
         }
     }
 }
