@@ -50,7 +50,7 @@ public class PlayerHealth : MonoBehaviour
     // Private variables
     private LimbUI[] allLimbs;
     private int disabledLimbCount = 0;
-    private float baseSpeed;
+    // Removed: private float baseSpeed; - now use PlayerStats
     private bool isDead = false;
     private float damageFlashTimer = 0f;
 
@@ -95,13 +95,6 @@ public class PlayerHealth : MonoBehaviour
             {
                 Debug.Log("Auto-found MomentumMovement script!");
             }
-        }
-
-        // Store base speed
-        if (movementScript != null)
-        {
-            baseSpeed = movementScript.moveSpeed;
-            Debug.Log($"Base speed stored: {baseSpeed}");
         }
 
         // Make sure damage flash starts disabled
@@ -256,21 +249,13 @@ public class PlayerHealth : MonoBehaviour
 
     void UpdateMovementSpeed()
     {
-        if (movementScript == null) return;
-
-        // Calculate speed reduction
-        // 1 disabled = 85% speed (15% reduction)
-        // 2 disabled = 70% speed (30% reduction)
-        // etc.
-        float speedMultiplier = 1f - (disabledLimbCount * speedReductionPerLimb);
-        speedMultiplier = Mathf.Clamp01(speedMultiplier); // Keep between 0-1
-
-        // Apply to movement script
-        movementScript.moveSpeed = baseSpeed * speedMultiplier;
+        // DISABLED: Speed reduction removed for simplicity
+        // With the new upgrade system, speed is SET directly
+        // Limb damage no longer affects speed
 
         if (showDebugInfo)
         {
-            Debug.Log($"Speed updated: {movementScript.moveSpeed:F1} ({speedMultiplier * 100:F0}% of base speed)");
+            Debug.Log($"{disabledLimbCount} limbs disabled (speed reduction disabled in this version)");
         }
     }
 
