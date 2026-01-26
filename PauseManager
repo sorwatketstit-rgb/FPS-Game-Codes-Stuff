@@ -21,6 +21,10 @@ public class PauseManager : MonoBehaviour
     [Tooltip("Player camera script to disable when paused")]
     public ModernFPSCamera playerCameraScript;
 
+    [Header("Settings")]
+    [Tooltip("Settings manager to refresh when opening settings panel")]
+    public SettingsManager settingsManager;
+
     [Header("Pause Settings")]
     [Tooltip("Can the player pause right now?")]
     public bool canPause = true;
@@ -267,6 +271,12 @@ public class PauseManager : MonoBehaviour
         {
             settingsPanel.SetActive(true);
         }
+
+        // Refresh settings UI to show current values
+        if (settingsManager != null)
+        {
+            settingsManager.RefreshSettingsUI();
+        }
     }
 
     public void OnBackFromSettingsPressed()
@@ -286,6 +296,16 @@ public class PauseManager : MonoBehaviour
         if (pauseMenuUI != null)
         {
             pauseMenuUI.SetActive(true);
+        }
+
+        // Make sure cursor is visible and unlocked (we're still in pause menu)
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Make sure crosshair stays hidden (we're still paused)
+        if (crosshairUI != null)
+        {
+            crosshairUI.SetActive(false);
         }
     }
 
