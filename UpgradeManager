@@ -262,6 +262,9 @@ public class UpgradeManager : MonoBehaviour
             Debug.Log("=== UPGRADE ROOM ENTERED ===");
         }
 
+        // CRITICAL: Reset selection state
+        hasSelectedUpgrade = false;
+
         // Disable pausing
         if (pauseManager != null)
         {
@@ -447,20 +450,41 @@ public class UpgradeManager : MonoBehaviour
         if (spriteToAssign != null)
         {
             buttonImage.sprite = spriteToAssign;
-            if (showDebugInfo) Debug.Log($"Assigned {upgradeType} sprite to {button.name}");
+            if (showDebugInfo)
+            {
+                Debug.Log($"Button {button.name}: Assigned {upgradeType} sprite (Sprite name: '{spriteToAssign.name}')");
+
+                // Warn if all sprites are the same
+                if (moveSpeedSprite == maxSpeedSprite && maxSpeedSprite == accelerationSprite)
+                {
+                    Debug.LogWarning("WARNING: All upgrade sprites appear to be the same! This may confuse players. Assign unique sprites for each upgrade type in UpgradeManager Inspector.");
+                }
+            }
         }
         else
         {
-            if (showDebugInfo) Debug.LogWarning($"No sprite assigned for {upgradeType}! Button will show default/previous sprite.");
+            if (showDebugInfo) Debug.LogWarning($"No sprite assigned for {upgradeType}! Assign sprites in UpgradeManager Inspector.");
         }
     }
 
     void SelectUpgrade(int buttonNumber)
     {
         // Prevent multiple selections
-        if (hasSelectedUpgrade) return;
+        if (hasSelectedUpgrade)
+        {
+            if (showDebugInfo)
+            {
+                Debug.LogWarning($"Already selected an upgrade! Ignoring button {buttonNumber}");
+            }
+            return;
+        }
 
         hasSelectedUpgrade = true;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"=== SELECT UPGRADE CALLED: Button {buttonNumber} ===");
+        }
 
         // Determine which upgrade was selected
         UpgradeType selectedUpgrade = UpgradeType.MoveSpeed; // Default
@@ -480,7 +504,8 @@ public class UpgradeManager : MonoBehaviour
 
         if (showDebugInfo)
         {
-            Debug.Log($"Player selected: {selectedUpgrade}");
+            Debug.Log($"Player selected: {selectedUpgrade} from Button {buttonNumber}");
+            Debug.Log($"Button assignments: 1={selectedUpgrade1}, 2={selectedUpgrade2}, 3={selectedUpgrade3}");
         }
 
         // Apply the upgrade
@@ -500,6 +525,11 @@ public class UpgradeManager : MonoBehaviour
         if (continueButton != null)
         {
             continueButton.SetActive(true);
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log("=== UPGRADE SELECTION COMPLETE ===");
         }
     }
 
