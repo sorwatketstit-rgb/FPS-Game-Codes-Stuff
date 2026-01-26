@@ -1,6 +1,6 @@
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using TMPro;
 
 public class ScoreManager : MonoBehaviour
 {
@@ -10,10 +10,10 @@ public class ScoreManager : MonoBehaviour
 
     [Header("UI References")]
     [Tooltip("Text to display current score (in-game HUD)")]
-    public Text scoreText;
+    public TextMeshProUGUI scoreText;
 
     [Tooltip("Text to display final score (on death screen)")]
-    public Text finalScoreText;
+    public TextMeshProUGUI finalScoreText;
 
     [Header("Death Screen")]
     [Tooltip("Game Over / Death screen UI panel")]
