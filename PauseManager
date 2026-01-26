@@ -14,12 +14,6 @@ public class PauseManager : MonoBehaviour
     [Tooltip("Main game UI canvas to hide when paused")]
     public GameObject mainGameUI;
 
-    [Tooltip("Pause menu camera to enable when paused")]
-    public Camera pauseCamera;
-
-    [Tooltip("Main game camera to disable when paused")]
-    public Camera gameCamera;
-
     [Header("Player References")]
     [Tooltip("Player movement script to disable when paused")]
     public MomentumMovement playerMovement;
@@ -36,6 +30,10 @@ public class PauseManager : MonoBehaviour
 
     [Tooltip("Use Time.timeScale = 0 when paused (freezes physics/animations)")]
     public bool freezeTime = true;
+
+    [Header("Crosshair Settings")]
+    [Tooltip("Crosshair UI element to hide when paused")]
+    public GameObject crosshairUI;
 
     [Header("Scene Settings")]
     [Tooltip("Name of the main menu scene to load")]
@@ -61,16 +59,10 @@ public class PauseManager : MonoBehaviour
             settingsPanel.SetActive(false);
         }
 
-        // Make sure pause camera starts disabled
-        if (pauseCamera != null)
+        // Make sure crosshair is visible at start
+        if (crosshairUI != null)
         {
-            pauseCamera.enabled = false;
-        }
-
-        // Make sure game camera starts enabled
-        if (gameCamera != null)
-        {
-            gameCamera.enabled = true;
+            crosshairUI.SetActive(true);
         }
 
         // Auto-find player scripts if not assigned
@@ -147,21 +139,16 @@ public class PauseManager : MonoBehaviour
             playerCameraScript.enabled = false;
         }
 
-        // Switch cameras
-        if (gameCamera != null)
-        {
-            gameCamera.enabled = false;
-        }
-
-        if (pauseCamera != null)
-        {
-            pauseCamera.enabled = true;
-        }
-
         // Hide main game UI
         if (mainGameUI != null)
         {
             mainGameUI.SetActive(false);
+        }
+
+        // Hide crosshair
+        if (crosshairUI != null)
+        {
+            crosshairUI.SetActive(false);
         }
 
         // Show cursor
@@ -208,21 +195,16 @@ public class PauseManager : MonoBehaviour
             playerCameraScript.enabled = true;
         }
 
-        // Switch cameras back
-        if (pauseCamera != null)
-        {
-            pauseCamera.enabled = false;
-        }
-
-        if (gameCamera != null)
-        {
-            gameCamera.enabled = true;
-        }
-
         // Show main game UI
         if (mainGameUI != null)
         {
             mainGameUI.SetActive(true);
+        }
+
+        // Show crosshair
+        if (crosshairUI != null)
+        {
+            crosshairUI.SetActive(true);
         }
 
         // Hide cursor
