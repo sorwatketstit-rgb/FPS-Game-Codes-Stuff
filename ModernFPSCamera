@@ -40,7 +40,7 @@ public class ModernFPSCamera : MonoBehaviour
     private float modelBobTimer = 0f;
     private Vector3 modelStartLocalPos;
     private Rigidbody playerRb;
-    
+
     // Teleport handling
     private bool cameraPaused = false;
 
@@ -70,16 +70,16 @@ public class ModernFPSCamera : MonoBehaviour
 
         yRotation = player.eulerAngles.y;
 
-        Debug.Log("FPS Camera Ready! Press ESC to unlock cursor.");
+        // Don't set FOV here - let SettingsManager handle it
+        // Removed: playerCamera.fieldOfView = normalFOV;
+
+        Debug.Log("FPS Camera Ready!");
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            ToggleCursor();
-        }
-
+        // ESC handling removed - now handled by PauseManager
+        // Only handle mouse look when cursor is locked (not paused)
         if (Cursor.lockState == CursorLockMode.Locked)
         {
             HandleMouseLook();
@@ -163,26 +163,17 @@ public class ModernFPSCamera : MonoBehaviour
         }
     }
 
-    void ToggleCursor()
-    {
-        Cursor.lockState = Cursor.lockState == CursorLockMode.Locked
-            ? CursorLockMode.None
-            : CursorLockMode.Locked;
-
-        Cursor.visible = !Cursor.visible;
-    }
-
     public void SetSensitivity(float sensitivity)
     {
         mouseSensitivity = Mathf.Clamp(sensitivity, 1f, 1000f);
     }
-    
+
     // Public method to pause camera updates during teleport
     public void PauseCameraUpdate(float duration)
     {
         StartCoroutine(PauseCameraCoroutine(duration));
     }
-    
+
     IEnumerator PauseCameraCoroutine(float duration)
     {
         cameraPaused = true;
