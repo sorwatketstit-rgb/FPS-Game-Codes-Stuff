@@ -1,0 +1,313 @@
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+
+public class PauseManager : MonoBehaviour
+{
+    [Header("Pause Menu UI")]
+    [Tooltip("The pause menu canvas/panel to show when paused")]
+    public GameObject pauseMenuUI;
+
+    [Tooltip("Settings panel (shows when Settings button is clicked)")]
+    public GameObject settingsPanel;
+
+    [Tooltip("Main game UI canvas to hide when paused")]
+    public GameObject mainGameUI;
+
+    [Tooltip("Pause menu camera to enable when paused")]
+    public Camera pauseCamera;
+
+    [Tooltip("Main game camera to disable when paused")]
+    public Camera gameCamera;
+
+    [Header("Player References")]
+    [Tooltip("Player movement script to disable when paused")]
+    public MomentumMovement playerMovement;
+
+    [Tooltip("Player shooting script to disable when paused")]
+    public PlayerShooting playerShooting;
+
+    [Tooltip("Player camera script to disable when paused")]
+    public ModernFPSCamera playerCameraScript;
+
+    [Header("Pause Settings")]
+    [Tooltip("Can the player pause right now?")]
+    public bool canPause = true;
+
+    [Tooltip("Use Time.timeScale = 0 when paused (freezes physics/animations)")]
+    public bool freezeTime = true;
+
+    [Header("Scene Settings")]
+    [Tooltip("Name of the main menu scene to load")]
+    public string mainMenuSceneName = "MainMenu";
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    // State
+    private bool isPaused = false;
+
+    void Start()
+    {
+        // Make sure pause menu starts hidden
+        if (pauseMenuUI != null)
+        {
+            pauseMenuUI.SetActive(false);
+        }
+
+        // Make sure settings panel starts hidden
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
+
+        // Make sure pause camera starts disabled
+        if (pauseCamera != null)
+        {
+            pauseCamera.enabled = false;
+        }
+
+        // Make sure game camera starts enabled
+        if (gameCamera != null)
+        {
+            gameCamera.enabled = true;
+        }
+
+        // Auto-find player scripts if not assigned
+        if (playerMovement == null)
+        {
+            playerMovement = FindFirstObjectByType<MomentumMovement>();
+        }
+
+        if (playerShooting == null)
+        {
+            playerShooting = FindFirstObjectByType<PlayerShooting>();
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log("PauseManager initialized! Press ESC to pause.");
+        }
+    }
+
+    void Update()
+    {
+        // Check for pause input (Escape key)
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (isPaused)
+            {
+                ResumeGame();
+            }
+            else
+            {
+                PauseGame();
+            }
+        }
+    }
+
+    public void PauseGame()
+    {
+        // Check if pausing is allowed
+        if (!canPause)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log("Cannot pause right now!");
+            }
+            return;
+        }
+
+        isPaused = true;
+
+        if (showDebugInfo)
+        {
+            Debug.Log("=== GAME PAUSED ===");
+        }
+
+        // Freeze time if enabled
+        if (freezeTime)
+        {
+            Time.timeScale = 0f;
+        }
+
+        // Disable player controls
+        if (playerMovement != null)
+        {
+            playerMovement.enabled = false;
+        }
+
+        if (playerShooting != null)
+        {
+            playerShooting.enabled = false;
+        }
+
+        if (playerCameraScript != null)
+        {
+            playerCameraScript.enabled = false;
+        }
+
+        // Switch cameras
+        if (gameCamera != null)
+        {
+            gameCamera.enabled = false;
+        }
+
+        if (pauseCamera != null)
+        {
+            pauseCamera.enabled = true;
+        }
+
+        // Hide main game UI
+        if (mainGameUI != null)
+        {
+            mainGameUI.SetActive(false);
+        }
+
+        // Show cursor
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Show pause menu
+        if (pauseMenuUI != null)
+        {
+            pauseMenuUI.SetActive(true);
+        }
+    }
+
+    public void ResumeGame()
+    {
+        if (!isPaused) return;
+
+        isPaused = false;
+
+        if (showDebugInfo)
+        {
+            Debug.Log("=== GAME RESUMED ===");
+        }
+
+        // Unfreeze time
+        if (freezeTime)
+        {
+            Time.timeScale = 1f;
+        }
+
+        // Re-enable player controls
+        if (playerMovement != null)
+        {
+            playerMovement.enabled = true;
+        }
+
+        if (playerShooting != null)
+        {
+            playerShooting.enabled = true;
+        }
+
+        if (playerCameraScript != null)
+        {
+            playerCameraScript.enabled = true;
+        }
+
+        // Switch cameras back
+        if (pauseCamera != null)
+        {
+            pauseCamera.enabled = false;
+        }
+
+        if (gameCamera != null)
+        {
+            gameCamera.enabled = true;
+        }
+
+        // Show main game UI
+        if (mainGameUI != null)
+        {
+            mainGameUI.SetActive(true);
+        }
+
+        // Hide cursor
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        // Hide pause menu
+        if (pauseMenuUI != null)
+        {
+            pauseMenuUI.SetActive(false);
+        }
+    }
+
+    // Public methods for UI buttons
+    public void OnResumeButtonPressed()
+    {
+        ResumeGame();
+    }
+
+    public void OnQuitButtonPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Back to Menu button pressed!");
+        }
+
+        // Unfreeze time before loading scene
+        Time.timeScale = 1f;
+
+        // Load main menu scene
+        SceneManager.LoadScene(mainMenuSceneName);
+    }
+
+    // Settings panel methods
+    public void OnSettingsButtonPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Settings button pressed - opening settings");
+        }
+
+        // Hide main pause menu
+        if (pauseMenuUI != null)
+        {
+            pauseMenuUI.SetActive(false);
+        }
+
+        // Show settings panel
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(true);
+        }
+    }
+
+    public void OnBackFromSettingsPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Back button pressed - closing settings");
+        }
+
+        // Hide settings panel
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
+
+        // Show main pause menu
+        if (pauseMenuUI != null)
+        {
+            pauseMenuUI.SetActive(true);
+        }
+    }
+
+    // Public method to enable/disable pausing (call from UpgradeManager, etc.)
+    public void SetCanPause(bool allowed)
+    {
+        canPause = allowed;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Pausing {(allowed ? "enabled" : "disabled")}");
+        }
+    }
+
+    // Public getter
+    public bool IsPaused() => isPaused;
+}
