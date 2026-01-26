@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
 using System.Collections.Generic;
 
 public class UpgradeManager : MonoBehaviour
@@ -16,6 +17,9 @@ public class UpgradeManager : MonoBehaviour
 
     [Tooltip("Camera control script (MonoBehaviour) - drag your MouseLook or camera controller here")]
     public MonoBehaviour cameraControlScript;
+
+    [Tooltip("Pause manager (to disable pausing in upgrade room)")]
+    public PauseManager pauseManager;
 
     [Header("UI References")]
     [Tooltip("The 3 upgrade choice buttons")]
@@ -135,11 +139,25 @@ public class UpgradeManager : MonoBehaviour
         }
 
         // PREWARM: Activate and deactivate the upgrade room to force initialization
+        // Use coroutine with delay to avoid allocation warnings
+        StartCoroutine(PrewarmAfterDelay());
+
+        if (showDebugInfo)
+        {
+            Debug.Log("UpgradeManager initialized!");
+        }
+    }
+
+    IEnumerator PrewarmAfterDelay()
+    {
+        // Wait a frame to let Unity finish initialization
+        yield return new WaitForEndOfFrame();
+
         PrewarmUpgradeRoom();
 
         if (showDebugInfo)
         {
-            Debug.Log("UpgradeManager initialized and prewarmed!");
+            Debug.Log("Prewarm completed!");
         }
     }
 
@@ -235,6 +253,12 @@ public class UpgradeManager : MonoBehaviour
             Debug.Log("=== UPGRADE ROOM ENTERED ===");
         }
 
+        // Disable pausing
+        if (pauseManager != null)
+        {
+            pauseManager.SetCanPause(false);
+        }
+
         // Disable player controls
         if (movementScript != null)
         {
@@ -284,6 +308,12 @@ public class UpgradeManager : MonoBehaviour
         if (showDebugInfo)
         {
             Debug.Log("Re-enabling player controls...");
+        }
+
+        // Re-enable pausing
+        if (pauseManager != null)
+        {
+            pauseManager.SetCanPause(true);
         }
 
         // Re-enable player controls
