@@ -17,6 +17,10 @@ public class SettingsManager : MonoBehaviour
     [Tooltip("Shooting script (for zoom FOV)")]
     public PlayerShooting shootingScript;
 
+    [Header("Post Processing")]
+    [Tooltip("Volume for post-processing effects")]
+    public Volume postProcessVolume;
+
     [Header("UI Sliders")]
     [Tooltip("Slider for mouse sensitivity")]
     public Slider sensitivitySlider;
@@ -26,6 +30,10 @@ public class SettingsManager : MonoBehaviour
 
     [Tooltip("Slider for zoom FOV")]
     public Slider zoomFovSlider;
+
+    [Header("UI Toggles")]
+    [Tooltip("Toggle for post-processing effects")]
+    public Toggle postProcessingToggle;
 
     [Header("UI Text (Optional)")]
     [Tooltip("Text to display current sensitivity value (TextMeshPro)")]
@@ -41,6 +49,7 @@ public class SettingsManager : MonoBehaviour
     public float defaultSensitivity = 400f;
     public float defaultFOV = 60f;
     public float defaultZoomFOV = 30f;
+    public bool defaultPostProcessing = true;
 
     [Header("Debug")]
     public bool showDebugInfo = true;
@@ -109,6 +118,10 @@ public class SettingsManager : MonoBehaviour
             zoomFovSlider.onValueChanged.AddListener(OnZoomFOVChanged);
         }
 
+        if (postProcessingToggle != null)
+        {
+            postProcessingToggle.onValueChanged.AddListener(OnPostProcessingToggled);
+        }
     }
 
     /// <summary>
@@ -133,21 +146,13 @@ public class SettingsManager : MonoBehaviour
     /// </summary>
     public void RefreshCameraFOV()
     {
-        if (playerCamera == null)
-        {
-            playerCamera = Camera.main;
-        }
+        // DON'T change FOV when resuming game
+        // The camera FOV is already correct - leave it alone!
+        // This method is kept for compatibility but does nothing
 
-        if (playerCamera != null)
+        if (showDebugInfo && playerCamera != null)
         {
-            // Load saved FOV and apply it
-            float savedFOV = PlayerPrefs.GetFloat("FOV", defaultFOV);
-            playerCamera.fieldOfView = savedFOV;
-
-            if (showDebugInfo)
-            {
-                Debug.Log($"Refreshed camera FOV to {savedFOV}");
-            }
+            Debug.Log($"Camera FOV left unchanged at: {playerCamera.fieldOfView}");
         }
     }
 
@@ -169,6 +174,10 @@ public class SettingsManager : MonoBehaviour
             shootingScript = FindFirstObjectByType<PlayerShooting>();
         }
 
+        if (postProcessVolume == null)
+        {
+            postProcessVolume = FindFirstObjectByType<Volume>();
+        }
     }
 
     void SaveSettings()
@@ -187,6 +196,11 @@ public class SettingsManager : MonoBehaviour
         if (shootingScript != null)
         {
             PlayerPrefs.SetFloat("ZoomFOV", shootingScript.zoomFOV);
+        }
+
+        if (postProcessVolume != null)
+        {
+            PlayerPrefs.SetInt("PostProcessing", postProcessVolume.enabled ? 1 : 0);
         }
 
         PlayerPrefs.Save();
@@ -277,6 +291,22 @@ public class SettingsManager : MonoBehaviour
         UpdateZoomFOVText();
     }
 
+    // ========== POST PROCESSING ==========
+
+    void OnPostProcessingToggled(bool isOn)
+    {
+        SetPostProcessing(isOn);
+        SaveSettings();
+    }
+
+    void SetPostProcessing(bool enabled)
+    {
+        if (postProcessVolume != null)
+        {
+            postProcessVolume.enabled = enabled;
+        }
+    }
+
     // ========== UI UPDATE ==========
 
     void UpdateUI()
@@ -299,6 +329,11 @@ public class SettingsManager : MonoBehaviour
         if (zoomFovSlider != null && shootingScript != null)
         {
             zoomFovSlider.value = 70f - shootingScript.zoomFOV;
+        }
+
+        if (postProcessingToggle != null && postProcessVolume != null)
+        {
+            postProcessingToggle.isOn = postProcessVolume.enabled;
         }
 
         // Manually update text displays with current values
@@ -325,6 +360,11 @@ public class SettingsManager : MonoBehaviour
         if (zoomFovSlider != null)
         {
             zoomFovSlider.onValueChanged.RemoveAllListeners();
+        }
+
+        if (postProcessingToggle != null)
+        {
+            postProcessingToggle.onValueChanged.RemoveAllListeners();
         }
     }
 
@@ -374,6 +414,7 @@ public class SettingsManager : MonoBehaviour
         SetSensitivity(defaultSensitivity);
         SetFOV(defaultFOV);
         SetZoomFOV(defaultZoomFOV);
+        SetPostProcessing(defaultPostProcessing);
 
         UpdateUI();
         SaveSettings();
