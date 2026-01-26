@@ -15,8 +15,8 @@ public class UpgradeManager : MonoBehaviour
     [Tooltip("Player camera to disable during upgrades")]
     public Camera playerCamera;
 
-    [Tooltip("Camera control script (MonoBehaviour) - drag your MouseLook or camera controller here")]
-    public MonoBehaviour cameraControlScript;
+    [Tooltip("Camera control script - drag ModernFPSCamera here")]
+    public ModernFPSCamera cameraControlScript;
 
     [Tooltip("Pause manager (to disable pausing in upgrade room)")]
     public PauseManager pauseManager;
@@ -122,15 +122,24 @@ public class UpgradeManager : MonoBehaviour
             return;
         }
 
-        // Set up button listeners
+        // Set up button listeners (clear first to prevent duplicates)
         if (upgradeButton1 != null)
+        {
+            upgradeButton1.onClick.RemoveAllListeners();
             upgradeButton1.onClick.AddListener(() => SelectUpgrade(1));
+        }
 
         if (upgradeButton2 != null)
+        {
+            upgradeButton2.onClick.RemoveAllListeners();
             upgradeButton2.onClick.AddListener(() => SelectUpgrade(2));
+        }
 
         if (upgradeButton3 != null)
+        {
+            upgradeButton3.onClick.RemoveAllListeners();
             upgradeButton3.onClick.AddListener(() => SelectUpgrade(3));
+        }
 
         // Hide continue button initially
         if (continueButton != null)
@@ -257,6 +266,15 @@ public class UpgradeManager : MonoBehaviour
         if (pauseManager != null)
         {
             pauseManager.SetCanPause(false);
+
+            if (showDebugInfo)
+            {
+                Debug.Log("Pausing DISABLED in upgrade room");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("PauseManager reference not set! Cannot disable pausing in upgrade room. Assign it in UpgradeManager Inspector.");
         }
 
         // Disable player controls
