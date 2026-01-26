@@ -215,6 +215,12 @@ public class PauseManager : MonoBehaviour
             playerCameraScript.enabled = true;
         }
 
+        // Refresh camera FOV to prevent reset
+        if (settingsManager != null)
+        {
+            settingsManager.RefreshCameraFOV();
+        }
+
         // Show crosshair
         if (crosshairUI != null)
         {
