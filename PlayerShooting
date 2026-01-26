@@ -65,7 +65,6 @@ public class PlayerShooting : MonoBehaviour
 
     // Private variables
     private float nextFireTime = 0f;
-    private float normalFOV;
     private bool isZoomed = false;
     private float muzzleFlashTimer = 0f;
     private Vector3 gunOriginalPosition;
@@ -85,8 +84,8 @@ public class PlayerShooting : MonoBehaviour
             }
         }
 
-        // Store normal FOV
-        normalFOV = playerCamera.fieldOfView;
+        // DON'T store normalFOV - read it from camera in real-time
+        // This allows SettingsManager to control FOV without conflicts
 
         // Store gun original position for recoil
         if (gunTransform != null)
@@ -146,9 +145,6 @@ public class PlayerShooting : MonoBehaviour
             {
                 enemy.TakeDamage();
                 Debug.Log($"Damaged enemy: {enemy.gameObject.name}");
-                // EnemyHealth.TakeDamage(int damageAmount = 1)
-                // Can now take damage amount as parameter Default is 1 (backwards compatible)
-                // Example: enemy.TakeDamage(2) deals 2 hits
             }
 
             // Visual debug
@@ -182,13 +178,22 @@ public class PlayerShooting : MonoBehaviour
             isZoomed = false;
         }
 
+        // Get current normal FOV from camera (allows SettingsManager to change it)
+        float normalFOV = playerCamera.fieldOfView;
+
         // Smoothly interpolate FOV
         float targetFOV = isZoomed ? zoomFOV : normalFOV;
-        playerCamera.fieldOfView = Mathf.Lerp(
-            playerCamera.fieldOfView,
-            targetFOV,
-            Time.deltaTime * zoomSpeed
-        );
+
+        // Only lerp if we're zoomed - otherwise keep the current FOV
+        if (isZoomed)
+        {
+            playerCamera.fieldOfView = Mathf.Lerp(
+                playerCamera.fieldOfView,
+                targetFOV,
+                Time.deltaTime * zoomSpeed
+            );
+        }
+        // When not zoomed, FOV is controlled by SettingsManager - don't touch it!
     }
 
     void TriggerMuzzleFlash()
