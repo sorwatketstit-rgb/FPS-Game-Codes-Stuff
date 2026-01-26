@@ -280,17 +280,26 @@ public class PlayerHealth : MonoBehaviour
 
         Debug.Log("PLAYER DIED! All limbs disabled.");
 
-        // TODO: Add death effects, game over screen, etc.
-        // For now, just stop movement
+        // Call ScoreManager to show death screen
+        if (ScoreManager.Instance != null)
+        {
+            ScoreManager.Instance.OnPlayerDeath();
+        }
+        else
+        {
+            Debug.LogError("ScoreManager not found! Add ScoreManager to scene.");
+        }
+
+        // Stop movement
         if (movementScript != null)
         {
             movementScript.moveSpeed = 0f;
         }
 
         // You can add more here:
-        // - Show death screen
+        // - Disable player controls
+        // - Play death animation
         // - Respawn player
-        // - End game
     }
 
     // Public methods for upgrades/healing
