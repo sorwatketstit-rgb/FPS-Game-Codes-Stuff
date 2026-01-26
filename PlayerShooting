@@ -69,6 +69,7 @@ public class PlayerShooting : MonoBehaviour
     private float muzzleFlashTimer = 0f;
     private Vector3 gunOriginalPosition;
     private Vector3 gunCurrentRecoil;
+    private float normalFOV = 60f; // Store normal FOV when entering zoom
 
     void Start()
     {
@@ -168,32 +169,30 @@ public class PlayerShooting : MonoBehaviour
         if (!enableZoom) return;
 
         // Toggle zoom with right mouse button
-        if (Input.GetButtonDown("Fire2")) // Right click
+        if (Input.GetButtonDown("Fire2")) // Right click - starting to zoom
         {
             isZoomed = true;
+            // Store the CURRENT FOV (from SettingsManager) as our normal FOV
+            normalFOV = playerCamera.fieldOfView;
         }
 
-        if (Input.GetButtonUp("Fire2"))
+        if (Input.GetButtonUp("Fire2")) // Releasing zoom
         {
             isZoomed = false;
+            // Immediately restore normal FOV (no lerp when unzooming)
+            playerCamera.fieldOfView = normalFOV;
+            return; // Exit early, don't lerp
         }
 
-        // Get current normal FOV from camera (allows SettingsManager to change it)
-        float normalFOV = playerCamera.fieldOfView;
-
-        // Smoothly interpolate FOV
-        float targetFOV = isZoomed ? zoomFOV : normalFOV;
-
-        // Only lerp if we're zoomed - otherwise keep the current FOV
+        // ONLY lerp when actively zoomed
         if (isZoomed)
         {
             playerCamera.fieldOfView = Mathf.Lerp(
                 playerCamera.fieldOfView,
-                targetFOV,
+                zoomFOV,
                 Time.deltaTime * zoomSpeed
             );
         }
-        // When not zoomed, FOV is controlled by SettingsManager - don't touch it!
     }
 
     void TriggerMuzzleFlash()
