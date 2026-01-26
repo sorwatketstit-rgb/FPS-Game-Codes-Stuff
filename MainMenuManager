@@ -1,0 +1,149 @@
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+
+public class MainMenuManager : MonoBehaviour
+{
+    [Header("Scene Settings")]
+    [Tooltip("Name of the game scene to load when Play is pressed")]
+    public string gameSceneName = "GameScene";
+
+    [Header("UI References (Optional)")]
+    [Tooltip("Play button (optional - can use onClick in Inspector instead)")]
+    public Button playButton;
+
+    [Tooltip("Quit button (optional)")]
+    public Button quitButton;
+
+    [Tooltip("Settings button (optional)")]
+    public Button settingsButton;
+
+    [Tooltip("Settings panel (optional)")]
+    public GameObject settingsPanel;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    void Start()
+    {
+        // Make sure cursor is visible in main menu
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Make sure time is running
+        Time.timeScale = 1f;
+
+        // Hide settings panel if assigned
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
+
+        // Set up button listeners (optional, can also use Inspector onClick)
+        if (playButton != null)
+        {
+            playButton.onClick.AddListener(OnPlayButtonPressed);
+        }
+
+        if (quitButton != null)
+        {
+            quitButton.onClick.AddListener(OnQuitButtonPressed);
+        }
+
+        if (settingsButton != null)
+        {
+            settingsButton.onClick.AddListener(OnSettingsButtonPressed);
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log("MainMenuManager initialized!");
+        }
+    }
+
+    // ========== BUTTON METHODS ==========
+
+    public void OnPlayButtonPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log($"Starting game - Loading scene: {gameSceneName}");
+        }
+
+        // Load game scene
+        SceneManager.LoadScene(gameSceneName);
+    }
+
+    public void OnQuitButtonPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Quit button pressed - Exiting game");
+        }
+
+        // Quit the application
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
+    public void OnSettingsButtonPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Settings button pressed - Opening settings");
+        }
+
+        // Show settings panel
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(true);
+        }
+    }
+
+    public void OnBackFromSettingsPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Back button pressed - Closing settings");
+        }
+
+        // Hide settings panel
+        if (settingsPanel != null)
+        {
+            settingsPanel.SetActive(false);
+        }
+    }
+
+    // ========== HELPER METHODS ==========
+
+    /// <summary>
+    /// Load a specific scene by name
+    /// </summary>
+    public void LoadScene(string sceneName)
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log($"Loading scene: {sceneName}");
+        }
+
+        SceneManager.LoadScene(sceneName);
+    }
+
+    /// <summary>
+    /// Reload the current scene
+    /// </summary>
+    public void ReloadCurrentScene()
+    {
+        string currentScene = SceneManager.GetActiveScene().name;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Reloading current scene: {currentScene}");
+        }
+
+        SceneManager.LoadScene(currentScene);
+    }
+}
