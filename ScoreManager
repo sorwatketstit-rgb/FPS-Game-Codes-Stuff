@@ -1,0 +1,216 @@
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+
+public class ScoreManager : MonoBehaviour
+{
+    [Header("Score Settings")]
+    [Tooltip("Points awarded per enemy kill")]
+    public int pointsPerKill = 20;
+
+    [Header("UI References")]
+    [Tooltip("Text to display current score (in-game HUD)")]
+    public Text scoreText;
+
+    [Tooltip("Text to display final score (on death screen)")]
+    public Text finalScoreText;
+
+    [Header("Death Screen")]
+    [Tooltip("Game Over / Death screen UI panel")]
+    public GameObject deathScreenUI;
+
+    [Header("Scene Settings")]
+    [Tooltip("Name of the game scene to reload on restart")]
+    public string gameSceneName = "GameScene";
+
+    [Tooltip("Name of the main menu scene")]
+    public string mainMenuSceneName = "MainMenu";
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    // Private variables
+    private int currentScore = 0;
+    private int highScore = 0;
+
+    // Singleton pattern (optional, makes it easier to access from anywhere)
+    public static ScoreManager Instance { get; private set; }
+
+    void Awake()
+    {
+        // Singleton setup
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+            return;
+        }
+    }
+
+    void Start()
+    {
+        // Load high score from PlayerPrefs
+        highScore = PlayerPrefs.GetInt("HighScore", 0);
+
+        // Make sure death screen starts hidden
+        if (deathScreenUI != null)
+        {
+            deathScreenUI.SetActive(false);
+        }
+
+        // Initialize score display
+        UpdateScoreUI();
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"ScoreManager initialized! High Score: {highScore}");
+        }
+    }
+
+    /// <summary>
+    /// Call this when an enemy is killed
+    /// </summary>
+    public void AddKill()
+    {
+        currentScore += pointsPerKill;
+        UpdateScoreUI();
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Enemy killed! Score: {currentScore} (+{pointsPerKill})");
+        }
+    }
+
+    /// <summary>
+    /// Add custom points (if you want different enemies to give different scores later)
+    /// </summary>
+    public void AddPoints(int points)
+    {
+        currentScore += points;
+        UpdateScoreUI();
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Points added: +{points}. Total: {currentScore}");
+        }
+    }
+
+    /// <summary>
+    /// Reset score to 0 (call when starting a new run)
+    /// </summary>
+    public void ResetScore()
+    {
+        currentScore = 0;
+        UpdateScoreUI();
+
+        if (showDebugInfo)
+        {
+            Debug.Log("Score reset to 0");
+        }
+    }
+
+    /// <summary>
+    /// Call this when the player dies
+    /// </summary>
+    public void OnPlayerDeath()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log($"=== PLAYER DIED === Final Score: {currentScore}");
+        }
+
+        // Check if new high score
+        if (currentScore > highScore)
+        {
+            highScore = currentScore;
+            PlayerPrefs.SetInt("HighScore", highScore);
+            PlayerPrefs.Save();
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"NEW HIGH SCORE: {highScore}!");
+            }
+        }
+
+        // Show death screen with final score
+        ShowDeathScreen();
+    }
+
+    void ShowDeathScreen()
+    {
+        // Show death screen UI
+        if (deathScreenUI != null)
+        {
+            deathScreenUI.SetActive(true);
+        }
+
+        // Update final score text
+        if (finalScoreText != null)
+        {
+            finalScoreText.text = $"Score: {currentScore}\nHigh Score: {highScore}";
+        }
+
+        // Unlock cursor for UI interaction
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Optionally pause the game (without using Time.timeScale if you want animations)
+        // Time.timeScale = 0f;
+    }
+
+    void UpdateScoreUI()
+    {
+        // Update in-game score display
+        if (scoreText != null)
+        {
+            scoreText.text = $"Score: {currentScore}";
+        }
+    }
+
+    // ========== PUBLIC GETTERS ==========
+
+    public int GetCurrentScore() => currentScore;
+    public int GetHighScore() => highScore;
+
+    // ========== UI BUTTON METHODS ==========
+
+    public void OnRestartButtonPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Restart button pressed!");
+        }
+
+        // Reset score for new run
+        ResetScore();
+
+        // Hide death screen
+        if (deathScreenUI != null)
+        {
+            deathScreenUI.SetActive(false);
+        }
+
+        // Unfreeze time if it was frozen
+        Time.timeScale = 1f;
+
+        // Reload the game scene
+        SceneManager.LoadScene(gameSceneName);
+    }
+
+    public void OnMainMenuButtonPressed()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("Main Menu button pressed!");
+        }
+
+        // Unfreeze time
+        Time.timeScale = 1f;
+
+        // Load main menu scene
+        SceneManager.LoadScene(mainMenuSceneName);
+    }
+}
