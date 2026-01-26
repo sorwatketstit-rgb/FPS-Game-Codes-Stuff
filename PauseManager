@@ -215,11 +215,8 @@ public class PauseManager : MonoBehaviour
             playerCameraScript.enabled = true;
         }
 
-        // Refresh camera FOV to prevent reset
-        if (settingsManager != null)
-        {
-            settingsManager.RefreshCameraFOV();
-        }
+        // Don't refresh camera FOV - let it stay as-is
+        // Settings are already applied when changed
 
         // Show crosshair
         if (crosshairUI != null)
@@ -304,7 +301,8 @@ public class PauseManager : MonoBehaviour
             pauseMenuUI.SetActive(true);
         }
 
-        // Make sure cursor is visible and unlocked (we're still in pause menu)
+        // IMPORTANT: Force cursor state for pause menu
+        // We're returning to pause menu, so cursor should be visible and unlocked
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
@@ -312,6 +310,11 @@ public class PauseManager : MonoBehaviour
         if (crosshairUI != null)
         {
             crosshairUI.SetActive(false);
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Cursor state after back from settings: lockState={Cursor.lockState}, visible={Cursor.visible}");
         }
     }
 
