@@ -25,9 +25,6 @@ public class UpgradeManagerUI : MonoBehaviour
     public Button upgradeButton2;
     public Button upgradeButton3;
 
-    [Tooltip("Continue button - shows after upgrade selection")]
-    private GameObject continueButton;
-
     [Tooltip("Text labels for upgrade names (TextMeshPro)")]
     public TMPro.TextMeshProUGUI upgradeText1;
     public TMPro.TextMeshProUGUI upgradeText2;
@@ -103,12 +100,6 @@ public class UpgradeManagerUI : MonoBehaviour
 
         // Set up button listeners
         SetupButtonListeners();
-
-        // Hide continue button initially
-        if (continueButton != null)
-        {
-            continueButton.SetActive(false);
-        }
 
         // Prewarm
         StartCoroutine(PrewarmAfterDelay());
@@ -242,8 +233,7 @@ public class UpgradeManagerUI : MonoBehaviour
         if (upgradeText3 != null) upgradeText3.gameObject.SetActive(true);
         if (uiBlockerPanel != null) uiBlockerPanel.SetActive(true);
 
-        // Hide continue button
-        if (continueButton != null) continueButton.SetActive(false);
+        if (showDebugInfo) Debug.Log("Upgrade buttons set to ACTIVE");
 
         // Randomize upgrade choices
         RandomizeUpgrades();
@@ -396,18 +386,11 @@ public class UpgradeManagerUI : MonoBehaviour
             Instantiate(upgradeParticleEffect, player.transform.position, Quaternion.identity);
         }
 
-        // Hide upgrade buttons
-        if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(false);
-        if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(false);
-        if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(false);
-        if (upgradeText1 != null) upgradeText1.gameObject.SetActive(false);
-        if (upgradeText2 != null) upgradeText2.gameObject.SetActive(false);
-        if (upgradeText3 != null) upgradeText3.gameObject.SetActive(false);
-
-        // Show continue button
-        if (continueButton != null) continueButton.SetActive(true);
-
         if (showDebugInfo) Debug.Log("=== UPGRADE COMPLETE ===");
+
+        // Close upgrade room immediately
+        // (The button's OnClick will also trigger next floor progression)
+        CloseUpgradeRoom();
     }
 
     /// <summary>
