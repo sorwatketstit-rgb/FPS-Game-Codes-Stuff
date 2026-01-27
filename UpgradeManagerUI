@@ -1,0 +1,423 @@
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
+
+/// <summary>
+/// Handles all upgrade room UI, button setup, and player control management
+/// Works with UpgradeApplier to apply actual upgrades
+/// </summary>
+public class UpgradeManagerUI : MonoBehaviour
+{
+    [Header("Player References")]
+    [Tooltip("The player GameObject")]
+    public GameObject player;
+
+    [Tooltip("Camera control script - drag ModernFPSCamera here")]
+    public ModernFPSCamera cameraControlScript;
+
+    [Tooltip("Pause manager (to disable pausing in upgrade room)")]
+    public PauseManager pauseManager;
+
+    [Header("UI References")]
+    [Tooltip("The 3 upgrade choice buttons")]
+    public Button upgradeButton1;
+    public Button upgradeButton2;
+    public Button upgradeButton3;
+
+    [Tooltip("Continue button - shows after upgrade selection")]
+    private GameObject continueButton;
+
+    [Tooltip("Text labels for upgrade names (TextMeshPro)")]
+    public TMPro.TextMeshProUGUI upgradeText1;
+    public TMPro.TextMeshProUGUI upgradeText2;
+    public TMPro.TextMeshProUGUI upgradeText3;
+
+    [Tooltip("Background blocker panel (prevents clicks going through)")]
+    public GameObject uiBlockerPanel;
+
+    [Header("Upgrade Button Images")]
+    public Sprite moveSpeedSprite;
+    public Sprite maxSpeedSprite;
+    public Sprite accelerationSprite;
+    public Sprite slideBoostSprite;
+    public Sprite groundDragSprite;
+    public Sprite airDragSprite;
+    public Sprite jumpForceSprite;
+    public Sprite fireRateSprite;
+    public Sprite fullHealSprite;
+    public Sprite maxHealthSprite;
+    public Sprite scoreMultiplierSprite;
+    public Sprite angelicBlunderbussSprite;
+
+    [Header("Particle Effect (Optional)")]
+    public GameObject upgradeParticleEffect;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+    [Tooltip("Show detailed logs")]
+    public bool showDetailedLogs = false;
+
+    // References
+    private UpgradeApplier upgradeApplier;
+    private MomentumMovement movementScript;
+    private PlayerShooting shootingScript;
+
+    // State
+    private UpgradeApplier.UpgradeType selectedUpgrade1;
+    private UpgradeApplier.UpgradeType selectedUpgrade2;
+    private UpgradeApplier.UpgradeType selectedUpgrade3;
+    private bool hasSelectedUpgrade = false;
+    private bool isPrewarming = false;
+
+    void Awake()
+    {
+        // Get the UpgradeApplier component (should be on same GameObject)
+        upgradeApplier = GetComponent<UpgradeApplier>();
+        if (upgradeApplier == null)
+        {
+            Debug.LogError("UpgradeManagerUI: UpgradeApplier component not found! Add it to the same GameObject.");
+        }
+    }
+
+    void Start()
+    {
+        // Validate references
+        if (player == null)
+        {
+            Debug.LogError("UpgradeManagerUI: Player not assigned!");
+            enabled = false;
+            return;
+        }
+
+        // Get player components
+        movementScript = player.GetComponent<MomentumMovement>();
+        shootingScript = player.GetComponent<PlayerShooting>();
+
+        if (movementScript == null || shootingScript == null)
+        {
+            Debug.LogError("UpgradeManagerUI: Missing movement or shooting script on player!");
+            enabled = false;
+            return;
+        }
+
+        // Set up button listeners
+        SetupButtonListeners();
+
+        // Hide continue button initially
+        if (continueButton != null)
+        {
+            continueButton.SetActive(false);
+        }
+
+        // Prewarm
+        StartCoroutine(PrewarmAfterDelay());
+
+        if (showDebugInfo)
+        {
+            Debug.Log("UpgradeManagerUI initialized!");
+        }
+    }
+
+    IEnumerator PrewarmAfterDelay()
+    {
+        yield return new WaitForEndOfFrame();
+        PrewarmUpgradeRoom();
+    }
+
+    void PrewarmUpgradeRoom()
+    {
+        if (showDebugInfo) Debug.Log("Prewarming upgrade room...");
+
+        GameObject upgradeRoomObject = gameObject;
+        bool wasActive = upgradeRoomObject.activeSelf;
+
+        isPrewarming = true;
+
+        if (!wasActive)
+        {
+            upgradeRoomObject.SetActive(true);
+        }
+        else
+        {
+            RandomizeUpgrades();
+        }
+
+        isPrewarming = false;
+
+        if (!wasActive)
+        {
+            upgradeRoomObject.SetActive(false);
+        }
+
+        if (showDebugInfo) Debug.Log("Upgrade room prewarmed!");
+    }
+
+    void OnEnable()
+    {
+        // Re-setup button listeners
+        SetupButtonListeners();
+
+        // If prewarming, only randomize
+        if (isPrewarming)
+        {
+            RandomizeUpgrades();
+            return;
+        }
+
+        // Actually prepare upgrade room
+        PrepareUpgradeRoom();
+    }
+
+    void SetupButtonListeners()
+    {
+        if (upgradeButton1 != null)
+        {
+            upgradeButton1.onClick.RemoveAllListeners();
+            upgradeButton1.onClick.AddListener(() => SelectUpgrade(1));
+        }
+
+        if (upgradeButton2 != null)
+        {
+            upgradeButton2.onClick.RemoveAllListeners();
+            upgradeButton2.onClick.AddListener(() => SelectUpgrade(2));
+        }
+
+        if (upgradeButton3 != null)
+        {
+            upgradeButton3.onClick.RemoveAllListeners();
+            upgradeButton3.onClick.AddListener(() => SelectUpgrade(3));
+        }
+
+        if (showDetailedLogs) Debug.Log("Button listeners set up!");
+    }
+
+    void OnDisable()
+    {
+        // Re-enable player controls when leaving upgrade room
+        ReenablePlayerControls();
+
+        // Clear button listeners
+        if (upgradeButton1 != null) upgradeButton1.onClick.RemoveAllListeners();
+        if (upgradeButton2 != null) upgradeButton2.onClick.RemoveAllListeners();
+        if (upgradeButton3 != null) upgradeButton3.onClick.RemoveAllListeners();
+    }
+
+    void PrepareUpgradeRoom()
+    {
+        if (showDebugInfo) Debug.Log("=== UPGRADE ROOM ENTERED ===");
+
+        hasSelectedUpgrade = false;
+
+        // Disable pausing
+        if (pauseManager != null)
+        {
+            pauseManager.SetCanPause(false);
+            if (showDebugInfo) Debug.Log("Pausing DISABLED");
+        }
+
+        // Pause game time
+        Time.timeScale = 0f;
+        if (showDebugInfo) Debug.Log("Game PAUSED (Time.timeScale = 0)");
+
+        // Disable player controls
+        if (movementScript != null) movementScript.enabled = false;
+        if (shootingScript != null) shootingScript.enabled = false;
+
+        // Disable camera & unlock cursor
+        if (cameraControlScript != null)
+        {
+            cameraControlScript.enabled = false;
+        }
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        // Show UI elements
+        if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(true);
+        if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(true);
+        if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(true);
+        if (upgradeText1 != null) upgradeText1.gameObject.SetActive(true);
+        if (upgradeText2 != null) upgradeText2.gameObject.SetActive(true);
+        if (upgradeText3 != null) upgradeText3.gameObject.SetActive(true);
+        if (uiBlockerPanel != null) uiBlockerPanel.SetActive(true);
+
+        // Hide continue button
+        if (continueButton != null) continueButton.SetActive(false);
+
+        // Randomize upgrade choices
+        RandomizeUpgrades();
+    }
+
+    void ReenablePlayerControls()
+    {
+        if (showDebugInfo) Debug.Log("Re-enabling player controls...");
+
+        // Re-enable pausing
+        if (pauseManager != null) pauseManager.SetCanPause(true);
+
+        // Resume game time
+        Time.timeScale = 1f;
+        if (showDebugInfo) Debug.Log("Game RESUMED (Time.timeScale = 1)");
+
+        // Re-enable player controls
+        if (movementScript != null) movementScript.enabled = true;
+        if (shootingScript != null) shootingScript.enabled = true;
+
+        // Re-enable camera
+        if (cameraControlScript != null) cameraControlScript.enabled = true;
+
+        // Lock cursor back
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
+    void RandomizeUpgrades()
+    {
+        if (upgradeApplier == null) return;
+
+        // Get available upgrades from applier
+        List<UpgradeApplier.UpgradeType> availableUpgrades = upgradeApplier.GetAvailableUpgrades();
+
+        if (availableUpgrades.Count < 3)
+        {
+            Debug.LogError("Not enough upgrades available!");
+            return;
+        }
+
+        // Shuffle
+        List<UpgradeApplier.UpgradeType> shuffled = new List<UpgradeApplier.UpgradeType>(availableUpgrades);
+        for (int i = shuffled.Count - 1; i > 0; i--)
+        {
+            int randomIndex = Random.Range(0, i + 1);
+            var temp = shuffled[i];
+            shuffled[i] = shuffled[randomIndex];
+            shuffled[randomIndex] = temp;
+        }
+
+        // Assign first 3
+        selectedUpgrade1 = shuffled[0];
+        selectedUpgrade2 = shuffled[1];
+        selectedUpgrade3 = shuffled[2];
+
+        // Update UI
+        UpdateButtonSprite(upgradeButton1, selectedUpgrade1);
+        UpdateButtonSprite(upgradeButton2, selectedUpgrade2);
+        UpdateButtonSprite(upgradeButton3, selectedUpgrade3);
+
+        UpdateButtonText(upgradeText1, selectedUpgrade1);
+        UpdateButtonText(upgradeText2, selectedUpgrade2);
+        UpdateButtonText(upgradeText3, selectedUpgrade3);
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Upgrades: {selectedUpgrade1}, {selectedUpgrade2}, {selectedUpgrade3}");
+        }
+    }
+
+    void UpdateButtonSprite(Button button, UpgradeApplier.UpgradeType upgradeType)
+    {
+        if (button == null) return;
+
+        Image buttonImage = button.GetComponent<Image>();
+        if (buttonImage == null) return;
+
+        Sprite spriteToAssign = null;
+
+        switch (upgradeType)
+        {
+            case UpgradeApplier.UpgradeType.MoveSpeed: spriteToAssign = moveSpeedSprite; break;
+            case UpgradeApplier.UpgradeType.MaxSpeed: spriteToAssign = maxSpeedSprite; break;
+            case UpgradeApplier.UpgradeType.Acceleration: spriteToAssign = accelerationSprite; break;
+            case UpgradeApplier.UpgradeType.SlideBoost: spriteToAssign = slideBoostSprite; break;
+            case UpgradeApplier.UpgradeType.GroundDrag: spriteToAssign = groundDragSprite; break;
+            case UpgradeApplier.UpgradeType.AirDrag: spriteToAssign = airDragSprite; break;
+            case UpgradeApplier.UpgradeType.JumpForce: spriteToAssign = jumpForceSprite; break;
+            case UpgradeApplier.UpgradeType.FireRate: spriteToAssign = fireRateSprite; break;
+            case UpgradeApplier.UpgradeType.FullHeal: spriteToAssign = fullHealSprite; break;
+            case UpgradeApplier.UpgradeType.MaxHealth: spriteToAssign = maxHealthSprite; break;
+            case UpgradeApplier.UpgradeType.ScoreMultiplier: spriteToAssign = scoreMultiplierSprite; break;
+            case UpgradeApplier.UpgradeType.AngelicBlunderbuss: spriteToAssign = angelicBlunderbussSprite; break;
+        }
+
+        if (spriteToAssign != null)
+        {
+            buttonImage.sprite = spriteToAssign;
+        }
+    }
+
+    void UpdateButtonText(TMPro.TextMeshProUGUI textLabel, UpgradeApplier.UpgradeType upgradeType)
+    {
+        if (textLabel == null || upgradeApplier == null) return;
+
+        string upgradeName = upgradeApplier.GetUpgradeName(upgradeType);
+        string upgradeDesc = upgradeApplier.GetUpgradeDescription(upgradeType);
+        bool isMaxLevel = upgradeApplier.IsUpgradeMaxed(upgradeType);
+
+        textLabel.text = $"{upgradeName}\n{upgradeDesc}";
+
+        // Gold for MAX, white for normal
+        textLabel.color = isMaxLevel ? new Color(1f, 0.84f, 0f) : Color.white;
+    }
+
+    void SelectUpgrade(int buttonNumber)
+    {
+        if (hasSelectedUpgrade)
+        {
+            if (showDebugInfo) Debug.LogWarning($"Already selected!");
+            return;
+        }
+
+        hasSelectedUpgrade = true;
+
+        // Determine which upgrade
+        UpgradeApplier.UpgradeType selectedUpgrade = selectedUpgrade1;
+        switch (buttonNumber)
+        {
+            case 1: selectedUpgrade = selectedUpgrade1; break;
+            case 2: selectedUpgrade = selectedUpgrade2; break;
+            case 3: selectedUpgrade = selectedUpgrade3; break;
+        }
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Selected: {selectedUpgrade} from Button {buttonNumber}");
+        }
+
+        // Apply the upgrade via applier
+        if (upgradeApplier != null)
+        {
+            upgradeApplier.ApplyUpgrade(selectedUpgrade);
+        }
+
+        // Play particle effect
+        if (upgradeParticleEffect != null && player != null)
+        {
+            Instantiate(upgradeParticleEffect, player.transform.position, Quaternion.identity);
+        }
+
+        // Hide upgrade buttons
+        if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(false);
+        if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(false);
+        if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(false);
+        if (upgradeText1 != null) upgradeText1.gameObject.SetActive(false);
+        if (upgradeText2 != null) upgradeText2.gameObject.SetActive(false);
+        if (upgradeText3 != null) upgradeText3.gameObject.SetActive(false);
+
+        // Show continue button
+        if (continueButton != null) continueButton.SetActive(true);
+
+        if (showDebugInfo) Debug.Log("=== UPGRADE COMPLETE ===");
+    }
+
+    /// <summary>
+    /// PUBLIC: Call from Continue button onClick to close upgrade room
+    /// </summary>
+    public void CloseUpgradeRoom()
+    {
+        if (showDebugInfo) Debug.Log("CloseUpgradeRoom() - unpausing");
+
+        if (uiBlockerPanel != null) uiBlockerPanel.SetActive(false);
+        gameObject.SetActive(false); // Triggers OnDisable -> unpause
+    }
+}
