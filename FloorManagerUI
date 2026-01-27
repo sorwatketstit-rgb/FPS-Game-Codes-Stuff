@@ -19,10 +19,18 @@ public class FloorManagerUI : MonoBehaviour
     [Tooltip("Text shown when wave starts (e.g., 'Wave 1 Start!')")]
     public TMPro.TextMeshProUGUI waveStartText;
 
+    [Tooltip("Text shown when floor is cleared (e.g., 'Floor Cleared!')")]
+    public TMPro.TextMeshProUGUI floorClearedText;
+
     [Header("Wave Start Settings")]
     [Tooltip("How long to show wave start text (in seconds)")]
     [Range(1f, 5f)]
     public float waveStartDisplayDuration = 2f;
+
+    [Header("Floor Cleared Settings")]
+    [Tooltip("How long to show floor cleared text (in seconds)")]
+    [Range(1f, 5f)]
+    public float floorClearedDisplayDuration = 2f;
 
     [Header("Debug")]
     public bool showDebugInfo = false;
@@ -40,6 +48,12 @@ public class FloorManagerUI : MonoBehaviour
         if (waveStartText != null)
         {
             waveStartText.gameObject.SetActive(false);
+        }
+
+        // Hide floor cleared text initially
+        if (floorClearedText != null)
+        {
+            floorClearedText.gameObject.SetActive(false);
         }
 
         // Hide UI initially (player is in lobby)
@@ -169,6 +183,65 @@ public class FloorManagerUI : MonoBehaviour
     }
 
     /// <summary>
+    /// Show floor cleared text (doesn't change the text, just shows it with fade)
+    /// </summary>
+    public void ShowFloorCleared()
+    {
+        if (floorClearedText != null)
+        {
+            // Don't change the text - just show it
+            floorClearedText.gameObject.SetActive(true);
+
+            // Start fade animation
+            StartCoroutine(FadeFloorClearedText());
+
+            if (showDebugInfo)
+            {
+                Debug.Log("Showing floor cleared text with fade animation");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fade in and fade out animation for floor cleared text
+    /// </summary>
+    IEnumerator FadeFloorClearedText()
+    {
+        if (floorClearedText == null) yield break;
+
+        float fadeDuration = 0.5f; // Time to fade in/out
+        float displayTime = floorClearedDisplayDuration - (fadeDuration * 2); // Time at full opacity
+
+        // Fade IN
+        float elapsed = 0f;
+        while (elapsed < fadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float alpha = Mathf.Clamp01(elapsed / fadeDuration);
+            SetTextAlpha(floorClearedText, alpha);
+            yield return null;
+        }
+        SetTextAlpha(floorClearedText, 1f); // Ensure fully visible
+
+        // STAY visible
+        yield return new WaitForSecondsRealtime(displayTime);
+
+        // Fade OUT
+        elapsed = 0f;
+        while (elapsed < fadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float alpha = Mathf.Clamp01(1f - (elapsed / fadeDuration));
+            SetTextAlpha(floorClearedText, alpha);
+            yield return null;
+        }
+        SetTextAlpha(floorClearedText, 0f); // Ensure fully transparent
+
+        // Hide the object
+        floorClearedText.gameObject.SetActive(false);
+    }
+
+    /// <summary>
     /// Helper to set text alpha (transparency)
     /// </summary>
     void SetTextAlpha(TMPro.TextMeshProUGUI text, float alpha)
@@ -202,6 +275,17 @@ public class FloorManagerUI : MonoBehaviour
         {
             waveStartText.gameObject.SetActive(false);
             waveStartTimer = 0f;
+        }
+    }
+
+    /// <summary>
+    /// Hide floor cleared text immediately
+    /// </summary>
+    public void HideFloorCleared()
+    {
+        if (floorClearedText != null)
+        {
+            floorClearedText.gameObject.SetActive(false);
         }
     }
 
