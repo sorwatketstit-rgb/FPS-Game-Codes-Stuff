@@ -126,7 +126,7 @@ public class ScoreManager : MonoBehaviour
         if (currentScore > highScore)
         {
             highScore = currentScore;
-            PlayerPrefs.SetInt(highScore);
+            PlayerPrefs.SetInt("High Score:", highScore);
             PlayerPrefs.Save();
 
             if (showDebugInfo)
