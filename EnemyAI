@@ -45,13 +45,17 @@ public class EnemyAI : MonoBehaviour
     [Tooltip("Where projectile spawns from")]
     public Transform firePoint;
 
-    [Tooltip("Time between shots")]
+    [Tooltip("Base time between shots (gets faster with waves)")]
     [Range(0f, 5f)]
-    public float fireRate = 1.5f;
+    public float baseFireRate = 1.5f;
 
     [Tooltip("Random variation in fire rate")]
     [Range(0f, 2f)]
     public float fireRateVariation = 0.5f;
+
+    [Header("Wave-Based Fire Rate")]
+    [Tooltip("Fire rates for each wave tier (6 tiers max)")]
+    public float[] waveFireRates = new float[6] { 1.5f, 0.2f, 0.1f, 0.05f, 0.03f, 0.01f };
 
     [Header("Debug")]
     public bool showDebugInfo = true;
@@ -62,9 +66,24 @@ public class EnemyAI : MonoBehaviour
     private bool shouldWalk = false;
     private Rigidbody rb;
     private UnityEngine.AI.NavMeshAgent navAgent;
+    private float currentFireRate;
+    private FloorWaveManager waveManager;
 
     void Start()
     {
+        // Find the wave manager in scene
+        waveManager = FindObjectOfType<FloorWaveManager>();
+        if (waveManager == null)
+        {
+            Debug.LogWarning($"{gameObject.name}: No FloorWaveManager found! Using base fire rate.");
+            currentFireRate = baseFireRate;
+        }
+        else
+        {
+            // Get current wave and set fire rate
+            UpdateFireRateFromWave();
+        }
+
         // Get components
         rb = GetComponent<Rigidbody>();
         navAgent = GetComponent<UnityEngine.AI.NavMeshAgent>();
@@ -138,7 +157,31 @@ public class EnemyAI : MonoBehaviour
         float initialVariation = Random.Range(0f, fireRateVariation);
         if (Random.value > 0.5f)
             initialVariation = -initialVariation;
-        nextFireTime = Time.time + fireRate + initialVariation;
+        nextFireTime = Time.time + currentFireRate + initialVariation;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"{gameObject.name}: Starting with fire rate: {currentFireRate}s (Wave tier based)");
+        }
+    }
+
+    void UpdateFireRateFromWave()
+    {
+        if (waveManager == null) return;
+
+        // Get current wave (1-indexed)
+        int currentWave = waveManager.GetCurrentWave();
+
+        // Clamp to array bounds (waves 1-6 map to indices 0-5)
+        int tierIndex = Mathf.Clamp(currentWave - 1, 0, waveFireRates.Length - 1);
+
+        // Set current fire rate from array
+        currentFireRate = waveFireRates[tierIndex];
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"{gameObject.name}: Wave {currentWave} - Fire rate set to {currentFireRate}s");
+        }
     }
 
     void Update()
@@ -178,7 +221,7 @@ public class EnemyAI : MonoBehaviour
                 float variance = Random.Range(0f, fireRateVariation);
                 if (Random.value > 0.5f)
                     variance = -variance;
-                nextFireTime = Time.time + fireRate + variance;
+                nextFireTime = Time.time + currentFireRate + variance;
             }
         }
     }
@@ -227,6 +270,7 @@ public class EnemyAI : MonoBehaviour
             }
         }
     }
+
     void MoveTowardPlayer()
     {
         if (rb == null || rb.isKinematic) return;
@@ -298,4 +342,5 @@ public class EnemyAI : MonoBehaviour
     // Public methods
     public bool CanSeePlayer() => canSeePlayer;
     public float GetDistanceToPlayer() => player != null ? Vector3.Distance(transform.position, player.position) : float.MaxValue;
+    public float GetCurrentFireRate() => currentFireRate;
 }
