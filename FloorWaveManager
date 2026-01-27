@@ -57,6 +57,13 @@ public class FloorWaveManager : MonoBehaviour
     [Tooltip("Platform/object to enable when upgrade room is disabled")]
     public GameObject platformObject;
 
+    [Header("UI")]
+    [Tooltip("Floor Manager UI - shows floor, wave, enemies info")]
+    public FloorManagerUI floorUI;
+
+    [Header("ScoreManagerUI")]
+    public ScoreManager scoreUI;
+
     [Header("Lobby")]
     [Tooltip("Lobby elevator trigger (for starting first floor from lobby)")]
     public ElevatorTrigger lobbyElevator;
@@ -167,6 +174,14 @@ public class FloorWaveManager : MonoBehaviour
 
     IEnumerator StartFloorSequence()
     {
+        // Show UI (was hidden in lobby)
+        if (floorUI != null)
+        {
+            floorUI.ShowUI();
+            scoreUI.ShowUI();
+            floorUI.SetFloor(currentFloor);
+        }
+
         // Spawn map
         yield return StartCoroutine(SpawnMapCoroutine());
 
@@ -321,6 +336,13 @@ public class FloorWaveManager : MonoBehaviour
             Debug.Log($"=== WAVE {currentWave}/{totalWavesThisFloor} STARTING ===");
         }
 
+        // Update UI - set wave
+        if (floorUI != null)
+        {
+            floorUI.SetWave(currentWave, totalWavesThisFloor);
+            floorUI.ShowWaveStart(); // Shows "Wave X Start!"
+        }
+
         // Find spawn points in current map
         Transform[] spawnPoints = FindSpawnPoints();
 
@@ -331,11 +353,13 @@ public class FloorWaveManager : MonoBehaviour
         }
 
         // Determine number of enemies to spawn
-        int enemyCount = Random.Range(minEnemiesPerWave, maxEnemiesPerWave + 1);
+        // Base count + 1 extra enemy per wave (Wave 1 = base, Wave 2 = base+1, Wave 3 = base+2, etc.)
+        int baseEnemyCount = Random.Range(minEnemiesPerWave, maxEnemiesPerWave + 1);
+        int enemyCount = baseEnemyCount + (currentWave - 1); // Add extra enemies for each wave
 
         if (showDebugInfo)
         {
-            Debug.Log($"Spawning {enemyCount} enemies across {spawnPoints.Length} spawn points");
+            Debug.Log($"Spawning {enemyCount} enemies ({baseEnemyCount} base + {currentWave - 1} wave bonus) across {spawnPoints.Length} spawn points");
         }
 
         // Clear old enemy list
@@ -359,6 +383,12 @@ public class FloorWaveManager : MonoBehaviour
                 Debug.Log($"Spawned {enemyPrefab.name} at {spawnPoint.name}");
             }
         }
+
+        // Update UI - set initial enemy count
+        if (floorUI != null)
+        {
+            floorUI.SetEnemiesRemaining(spawnedEnemies.Count);
+        }
     }
 
     Transform[] FindSpawnPoints()
@@ -379,6 +409,12 @@ public class FloorWaveManager : MonoBehaviour
     {
         // Remove null references (destroyed enemies)
         spawnedEnemies.RemoveAll(enemy => enemy == null);
+
+        // Update UI - enemies remaining
+        if (floorUI != null)
+        {
+            floorUI.SetEnemiesRemaining(spawnedEnemies.Count);
+        }
 
         // Check if all enemies are dead
         if (spawnedEnemies.Count == 0)
@@ -579,6 +615,12 @@ public class FloorWaveManager : MonoBehaviour
         if (showDebugInfo)
         {
             Debug.Log($"Floor {currentFloor} will have {totalWavesThisFloor} wave(s)");
+        }
+
+        // Update UI - set new floor
+        if (floorUI != null)
+        {
+            floorUI.SetFloor(currentFloor);
         }
 
         // Spawn the map
