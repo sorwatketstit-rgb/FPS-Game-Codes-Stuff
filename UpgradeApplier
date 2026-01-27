@@ -235,7 +235,7 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.ScoreMultiplier:
                 return scoreMultiplierLevel < scoreMultiplierTiers.Length ? $"-> {scoreMultiplierTiers[scoreMultiplierLevel]} pts/kill" : "MAX LEVEL";
             case UpgradeType.AngelicBlunderbuss:
-                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "Dmg: 3 | Range: 50";
+                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "";
             default:
                 return "";
         }
