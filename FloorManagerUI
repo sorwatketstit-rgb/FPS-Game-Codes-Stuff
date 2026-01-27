@@ -1,0 +1,191 @@
+using UnityEngine;
+
+/// <summary>
+/// Displays floor number, wave number, enemies remaining, and wave start notifications
+/// </summary>
+public class FloorManagerUI : MonoBehaviour
+{
+    [Header("UI Text References")]
+    [Tooltip("Text showing current floor (e.g., 'Floor 5')")]
+    public TMPro.TextMeshProUGUI floorText;
+
+    [Tooltip("Text showing current wave (e.g., 'Wave 2/3')")]
+    public TMPro.TextMeshProUGUI waveText;
+
+    [Tooltip("Text showing enemies remaining (e.g., 'Enemies: 12')")]
+    public TMPro.TextMeshProUGUI enemiesRemainingText;
+
+    [Tooltip("Text shown when wave starts (e.g., 'Wave 1 Start!')")]
+    public TMPro.TextMeshProUGUI waveStartText;
+
+    [Header("Wave Start Settings")]
+    [Tooltip("How long to show wave start text (in seconds)")]
+    [Range(1f, 5f)]
+    public float waveStartDisplayDuration = 2f;
+
+    [Header("Debug")]
+    public bool showDebugInfo = false;
+
+    // Private variables
+    private int currentFloor = 1;
+    private int currentWave = 1;
+    private int totalWaves = 1;
+    private int enemiesRemaining = 0;
+    private float waveStartTimer = 0f;
+
+    void Start()
+    {
+        // Hide wave start text initially
+        if (waveStartText != null)
+        {
+            waveStartText.gameObject.SetActive(false);
+        }
+
+        // Initialize display
+        UpdateFloorDisplay();
+        UpdateWaveDisplay();
+        UpdateEnemiesDisplay();
+
+        if (showDebugInfo)
+        {
+            Debug.Log("FloorManagerUI initialized!");
+        }
+    }
+
+    void Update()
+    {
+        // Handle wave start text timer
+        if (waveStartTimer > 0f)
+        {
+            waveStartTimer -= Time.deltaTime;
+
+            if (waveStartTimer <= 0f && waveStartText != null)
+            {
+                waveStartText.gameObject.SetActive(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Set the current floor number
+    /// </summary>
+    public void SetFloor(int floorNumber)
+    {
+        currentFloor = floorNumber;
+        UpdateFloorDisplay();
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Floor set to: {floorNumber}");
+        }
+    }
+
+    /// <summary>
+    /// Set the current wave and total waves for this floor
+    /// </summary>
+    public void SetWave(int waveNumber, int totalWavesForFloor)
+    {
+        currentWave = waveNumber;
+        totalWaves = totalWavesForFloor;
+        UpdateWaveDisplay();
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Wave set to: {waveNumber}/{totalWavesForFloor}");
+        }
+    }
+
+    /// <summary>
+    /// Update the enemies remaining count
+    /// </summary>
+    public void SetEnemiesRemaining(int count)
+    {
+        enemiesRemaining = count;
+        UpdateEnemiesDisplay();
+    }
+
+    /// <summary>
+    /// Show "Wave X Start!" text
+    /// </summary>
+    public void ShowWaveStart()
+    {
+        if (waveStartText != null)
+        {
+            waveStartText.text = $"Wave {currentWave} Start!";
+            waveStartText.gameObject.SetActive(true);
+            waveStartTimer = waveStartDisplayDuration;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"Showing: Wave {currentWave} Start!");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show "Wave X Start!" with custom text
+    /// </summary>
+    public void ShowWaveStart(string customText)
+    {
+        if (waveStartText != null)
+        {
+            waveStartText.text = customText;
+            waveStartText.gameObject.SetActive(true);
+            waveStartTimer = waveStartDisplayDuration;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"Showing: {customText}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Hide wave start text immediately
+    /// </summary>
+    public void HideWaveStart()
+    {
+        if (waveStartText != null)
+        {
+            waveStartText.gameObject.SetActive(false);
+            waveStartTimer = 0f;
+        }
+    }
+
+    // Update display methods
+    void UpdateFloorDisplay()
+    {
+        if (floorText != null)
+        {
+            floorText.text = $"Floor {currentFloor}";
+        }
+    }
+
+    void UpdateWaveDisplay()
+    {
+        if (waveText != null)
+        {
+            if (totalWaves > 1)
+            {
+                waveText.text = $"Wave {currentWave}/{totalWaves}";
+            }
+            else
+            {
+                waveText.text = $"Wave {currentWave}";
+            }
+        }
+    }
+
+    void UpdateEnemiesDisplay()
+    {
+        if (enemiesRemainingText != null)
+        {
+            enemiesRemainingText.text = $"Enemies: {enemiesRemaining}";
+        }
+    }
+
+    // Public getters
+    public int GetCurrentFloor() => currentFloor;
+    public int GetCurrentWave() => currentWave;
+    public int GetEnemiesRemaining() => enemiesRemaining;
+}
