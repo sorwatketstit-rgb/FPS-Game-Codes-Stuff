@@ -1,0 +1,397 @@
+using UnityEngine;
+using System.Collections.Generic;
+
+/// <summary>
+/// Handles all upgrade logic, stat application, and upgrade pool management
+/// Works with UpgradeManagerUI to provide upgrade choices
+/// </summary>
+public class UpgradeApplier : MonoBehaviour
+{
+    [Header("Player References")]
+    public GameObject player;
+
+    [Header("Upgrade Values")]
+    public float[] moveSpeedTiers = { 35f, 40f, 45f, 50f, 55f };
+    public float[] maxSpeedTiers = { 25f, 30f, 35f, 40f, 45f };
+    public float[] accelerationTiers = { 15f, 20f, 25f, 30f, 35f };
+    public float[] slideBoostTiers = { 10f, 15f, 20f, 25f, 30f };
+    public float[] groundDragTiers = { 4f, 3f, 2f, 1f, 0.5f };
+    public float[] airDragTiers = { 1.5f, 1f, 0.5f, 0.2f, 0.1f };
+    public float[] jumpForceTiers = { 8f, 10f, 12f, 14f, 16f };
+    public float[] fireRateTiers = { 0.05f, 0.01f, 0.001f };
+    public int[] maxHealthTiers = { 4, 5, 6 };
+    public int[] scoreMultiplierTiers = { 10, 15, 20 };
+
+    [Header("Special Upgrades")]
+    public int angelicBlunderbussDamage = 3;
+    public float angelicBlunderbussRange = 50f;
+    public float angelicBlunderbussFireRate = 0.75f;
+    public GameObject normalGunModel;
+    public GameObject angelicBlunderbussModel;
+
+    [Header("Debug")]
+    public bool showDebugInfo = true;
+
+    // Upgrade levels
+    private int moveSpeedLevel = 0;
+    private int maxSpeedLevel = 0;
+    private int accelerationLevel = 0;
+    private int slideBoostLevel = 0;
+    private int groundDragLevel = 0;
+    private int airDragLevel = 0;
+    private int jumpForceLevel = 0;
+    private int fireRateLevel = 0;
+    private int maxHealthLevel = 0;
+    private int scoreMultiplierLevel = 0;
+    private bool hasAngelicBlunderbuss = false;
+
+    // Component references
+    private MomentumMovement movementScript;
+    private PlayerShooting shootingScript;
+    private PlayerHealth playerHealth;
+    private ScoreManager scoreManager;
+
+    // Upgrade pool
+    private List<UpgradeType> availableUpgrades = new List<UpgradeType>();
+
+    public enum UpgradeType
+    {
+        MoveSpeed,
+        MaxSpeed,
+        Acceleration,
+        SlideBoost,
+        GroundDrag,
+        AirDrag,
+        JumpForce,
+        FireRate,
+        FullHeal,
+        MaxHealth,
+        ScoreMultiplier,
+        AngelicBlunderbuss
+    }
+
+    void Awake()
+    {
+        InitializeUpgradePool();
+    }
+
+    void Start()
+    {
+        if (player == null)
+        {
+            Debug.LogError("UpgradeApplier: Player not assigned!");
+            return;
+        }
+
+        movementScript = player.GetComponent<MomentumMovement>();
+        shootingScript = player.GetComponent<PlayerShooting>();
+        playerHealth = player.GetComponent<PlayerHealth>();
+
+        if (playerHealth == null)
+        {
+            Debug.LogWarning("PlayerHealth not found!");
+        }
+
+        scoreManager = FindObjectOfType<ScoreManager>();
+        if (scoreManager == null)
+        {
+            Debug.LogWarning("ScoreManager not found!");
+        }
+    }
+
+    void InitializeUpgradePool()
+    {
+        availableUpgrades.Clear();
+
+        // Common upgrades (10 copies each = ~1% each)
+        for (int i = 0; i < 10; i++)
+        {
+            availableUpgrades.Add(UpgradeType.MoveSpeed);
+            availableUpgrades.Add(UpgradeType.MaxSpeed);
+            availableUpgrades.Add(UpgradeType.Acceleration);
+            availableUpgrades.Add(UpgradeType.SlideBoost);
+            availableUpgrades.Add(UpgradeType.GroundDrag);
+            availableUpgrades.Add(UpgradeType.AirDrag);
+            availableUpgrades.Add(UpgradeType.JumpForce);
+            availableUpgrades.Add(UpgradeType.FireRate);
+        }
+
+        // Healing (5 copies each)
+        for (int i = 0; i < 5; i++)
+        {
+            availableUpgrades.Add(UpgradeType.FullHeal);
+            availableUpgrades.Add(UpgradeType.MaxHealth);
+        }
+
+        // Score multiplier (5 copies)
+        for (int i = 0; i < 5; i++)
+        {
+            availableUpgrades.Add(UpgradeType.ScoreMultiplier);
+        }
+
+        // Angelic Blunderbuss (1 copy = ~1% chance)
+        if (!hasAngelicBlunderbuss)
+        {
+            availableUpgrades.Add(UpgradeType.AngelicBlunderbuss);
+        }
+
+        if (showDebugInfo)
+        {
+            float angelicChance = hasAngelicBlunderbuss ? 0f : (1f / availableUpgrades.Count) * 100f;
+            Debug.Log($"Upgrade pool: {availableUpgrades.Count} | Angelic: {angelicChance:F2}%");
+        }
+    }
+
+    public List<UpgradeType> GetAvailableUpgrades()
+    {
+        // Filter out maxed upgrades
+        List<UpgradeType> filtered = new List<UpgradeType>();
+
+        foreach (var upgrade in availableUpgrades)
+        {
+            if (!IsUpgradeMaxed(upgrade))
+            {
+                filtered.Add(upgrade);
+            }
+        }
+
+        // Pad with maxed if needed
+        if (filtered.Count < 3)
+        {
+            foreach (var upgrade in availableUpgrades)
+            {
+                if (filtered.Count >= 3) break;
+                if (!filtered.Contains(upgrade))
+                {
+                    filtered.Add(upgrade);
+                }
+            }
+        }
+
+        return filtered;
+    }
+
+    public bool IsUpgradeMaxed(UpgradeType type)
+    {
+        switch (type)
+        {
+            case UpgradeType.MoveSpeed: return moveSpeedLevel >= moveSpeedTiers.Length;
+            case UpgradeType.MaxSpeed: return maxSpeedLevel >= maxSpeedTiers.Length;
+            case UpgradeType.Acceleration: return accelerationLevel >= accelerationTiers.Length;
+            case UpgradeType.SlideBoost: return slideBoostLevel >= slideBoostTiers.Length;
+            case UpgradeType.GroundDrag: return groundDragLevel >= groundDragTiers.Length;
+            case UpgradeType.AirDrag: return airDragLevel >= airDragTiers.Length;
+            case UpgradeType.JumpForce: return jumpForceLevel >= jumpForceTiers.Length;
+            case UpgradeType.FireRate: return fireRateLevel >= fireRateTiers.Length;
+            case UpgradeType.FullHeal: return false; // Can always heal
+            case UpgradeType.MaxHealth: return maxHealthLevel >= maxHealthTiers.Length;
+            case UpgradeType.ScoreMultiplier: return scoreMultiplierLevel >= scoreMultiplierTiers.Length;
+            case UpgradeType.AngelicBlunderbuss: return hasAngelicBlunderbuss;
+            default: return false;
+        }
+    }
+
+    public string GetUpgradeName(UpgradeType type)
+    {
+        switch (type)
+        {
+            case UpgradeType.MoveSpeed: return "Movement Speed";
+            case UpgradeType.MaxSpeed: return "Max Speed";
+            case UpgradeType.Acceleration: return "Acceleration";
+            case UpgradeType.SlideBoost: return "Slide Boost";
+            case UpgradeType.GroundDrag: return "Ground Friction";
+            case UpgradeType.AirDrag: return "Air Control";
+            case UpgradeType.JumpForce: return "Jump Height";
+            case UpgradeType.FireRate: return "Fire Rate";
+            case UpgradeType.FullHeal: return "Full Heal";
+            case UpgradeType.MaxHealth: return "Max Health";
+            case UpgradeType.ScoreMultiplier: return "Score Multiplier";
+            case UpgradeType.AngelicBlunderbuss: return "Angelic Blunderbuss";
+            default: return "Unknown";
+        }
+    }
+
+    public string GetUpgradeDescription(UpgradeType type)
+    {
+        switch (type)
+        {
+            case UpgradeType.MoveSpeed:
+                return moveSpeedLevel < moveSpeedTiers.Length ? $"-> {moveSpeedTiers[moveSpeedLevel]}" : "MAX LEVEL";
+            case UpgradeType.MaxSpeed:
+                return maxSpeedLevel < maxSpeedTiers.Length ? $"-> {maxSpeedTiers[maxSpeedLevel]}" : "MAX LEVEL";
+            case UpgradeType.Acceleration:
+                return accelerationLevel < accelerationTiers.Length ? $"-> {accelerationTiers[accelerationLevel]}" : "MAX LEVEL";
+            case UpgradeType.SlideBoost:
+                return slideBoostLevel < slideBoostTiers.Length ? $"-> {slideBoostTiers[slideBoostLevel]}" : "MAX LEVEL";
+            case UpgradeType.GroundDrag:
+                return groundDragLevel < groundDragTiers.Length ? $"-> {groundDragTiers[groundDragLevel]}" : "MAX LEVEL";
+            case UpgradeType.AirDrag:
+                return airDragLevel < airDragTiers.Length ? $"-> {airDragTiers[airDragLevel]}" : "MAX LEVEL";
+            case UpgradeType.JumpForce:
+                return jumpForceLevel < jumpForceTiers.Length ? $"-> {jumpForceTiers[jumpForceLevel]}" : "MAX LEVEL";
+            case UpgradeType.FireRate:
+                return fireRateLevel < fireRateTiers.Length ? $"-> {fireRateTiers[fireRateLevel]}s" : "MAX LEVEL";
+            case UpgradeType.FullHeal:
+                return "Restore All Limbs";
+            case UpgradeType.MaxHealth:
+                return maxHealthLevel < maxHealthTiers.Length ? $"-> {maxHealthTiers[maxHealthLevel]} hits/limb" : "MAX LEVEL";
+            case UpgradeType.ScoreMultiplier:
+                return scoreMultiplierLevel < scoreMultiplierTiers.Length ? $"-> {scoreMultiplierTiers[scoreMultiplierLevel]} pts/kill" : "MAX LEVEL";
+            case UpgradeType.AngelicBlunderbuss:
+                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "LEGENDARY WEAPON";
+            default:
+                return "";
+        }
+    }
+
+    public void ApplyUpgrade(UpgradeType type)
+    {
+        if (movementScript == null || shootingScript == null) return;
+
+        switch (type)
+        {
+            case UpgradeType.MoveSpeed:
+                if (moveSpeedLevel < moveSpeedTiers.Length)
+                {
+                    movementScript.moveSpeed = moveSpeedTiers[moveSpeedLevel];
+                    if (showDebugInfo) Debug.Log($"Move Speed -> {moveSpeedTiers[moveSpeedLevel]}");
+                    moveSpeedLevel++;
+                }
+                break;
+
+            case UpgradeType.MaxSpeed:
+                if (maxSpeedLevel < maxSpeedTiers.Length)
+                {
+                    movementScript.maxSpeed = maxSpeedTiers[maxSpeedLevel];
+                    if (showDebugInfo) Debug.Log($"Max Speed -> {maxSpeedTiers[maxSpeedLevel]}");
+                    maxSpeedLevel++;
+                }
+                break;
+
+            case UpgradeType.Acceleration:
+                if (accelerationLevel < accelerationTiers.Length)
+                {
+                    movementScript.acceleration = accelerationTiers[accelerationLevel];
+                    if (showDebugInfo) Debug.Log($"Acceleration -> {accelerationTiers[accelerationLevel]}");
+                    accelerationLevel++;
+                }
+                break;
+
+            case UpgradeType.SlideBoost:
+                if (slideBoostLevel < slideBoostTiers.Length)
+                {
+                    movementScript.slideBoost = slideBoostTiers[slideBoostLevel];
+                    if (showDebugInfo) Debug.Log($"Slide Boost -> {slideBoostTiers[slideBoostLevel]}");
+                    slideBoostLevel++;
+                }
+                break;
+
+            case UpgradeType.GroundDrag:
+                if (groundDragLevel < groundDragTiers.Length)
+                {
+                    movementScript.groundDrag = groundDragTiers[groundDragLevel];
+                    if (showDebugInfo) Debug.Log($"Ground Drag -> {groundDragTiers[groundDragLevel]}");
+                    groundDragLevel++;
+                }
+                break;
+
+            case UpgradeType.AirDrag:
+                if (airDragLevel < airDragTiers.Length)
+                {
+                    movementScript.airDrag = airDragTiers[airDragLevel];
+                    if (showDebugInfo) Debug.Log($"Air Drag -> {airDragTiers[airDragLevel]}");
+                    airDragLevel++;
+                }
+                break;
+
+            case UpgradeType.JumpForce:
+                if (jumpForceLevel < jumpForceTiers.Length)
+                {
+                    movementScript.jumpForce = jumpForceTiers[jumpForceLevel];
+                    if (showDebugInfo) Debug.Log($"Jump Force -> {jumpForceTiers[jumpForceLevel]}");
+                    jumpForceLevel++;
+                }
+                break;
+
+            case UpgradeType.FireRate:
+                if (fireRateLevel < fireRateTiers.Length)
+                {
+                    shootingScript.fireRate = fireRateTiers[fireRateLevel];
+                    if (showDebugInfo) Debug.Log($"Fire Rate -> {fireRateTiers[fireRateLevel]}s");
+                    fireRateLevel++;
+                }
+                break;
+
+            case UpgradeType.FullHeal:
+                if (playerHealth != null)
+                {
+                    for (int i = 0; i < 6; i++)
+                    {
+                        playerHealth.HealLimb(i);
+                        playerHealth.HealLimb(i);
+                        playerHealth.HealLimb(i);
+                    }
+                    if (showDebugInfo) Debug.Log("FULL HEAL!");
+                }
+                break;
+
+            case UpgradeType.MaxHealth:
+                if (maxHealthLevel < maxHealthTiers.Length && playerHealth != null)
+                {
+                    playerHealth.maxHitsPerLimb = maxHealthTiers[maxHealthLevel];
+                    if (showDebugInfo) Debug.Log($"Max Health -> {maxHealthTiers[maxHealthLevel]} hits/limb");
+                    maxHealthLevel++;
+                }
+                break;
+
+            case UpgradeType.ScoreMultiplier:
+                if (scoreMultiplierLevel < scoreMultiplierTiers.Length && scoreManager != null)
+                {
+                    scoreManager.pointsPerKill = scoreMultiplierTiers[scoreMultiplierLevel];
+                    if (showDebugInfo) Debug.Log($"Score Multiplier -> {scoreMultiplierTiers[scoreMultiplierLevel]} pts/kill");
+                    scoreMultiplierLevel++;
+                }
+                break;
+
+            case UpgradeType.AngelicBlunderbuss:
+                if (!hasAngelicBlunderbuss)
+                {
+                    fireRateLevel = fireRateTiers.Length;
+                    shootingScript.fireRate = angelicBlunderbussFireRate;
+                    shootingScript.shootRange = angelicBlunderbussRange;
+                    shootingScript.damagePerShot = angelicBlunderbussDamage;
+
+                    if (normalGunModel != null) normalGunModel.SetActive(false);
+                    if (angelicBlunderbussModel != null) angelicBlunderbussModel.SetActive(true);
+
+                    hasAngelicBlunderbuss = true;
+
+                    if (showDebugInfo)
+                    {
+                        Debug.Log("========================================");
+                        Debug.Log("ANGELIC BLUNDERBUSS ACQUIRED!");
+                        Debug.Log($"Damage: {angelicBlunderbussDamage} | Range: {angelicBlunderbussRange} | Fire Rate: {angelicBlunderbussFireRate}s");
+                        Debug.Log("========================================");
+                    }
+                }
+                break;
+        }
+    }
+
+    public void ResetAllUpgrades()
+    {
+        moveSpeedLevel = 0;
+        maxSpeedLevel = 0;
+        accelerationLevel = 0;
+        slideBoostLevel = 0;
+        groundDragLevel = 0;
+        airDragLevel = 0;
+        jumpForceLevel = 0;
+        fireRateLevel = 0;
+        maxHealthLevel = 0;
+        scoreMultiplierLevel = 0;
+        hasAngelicBlunderbuss = false;
+
+        if (showDebugInfo) Debug.Log("All upgrades reset!");
+    }
+}
