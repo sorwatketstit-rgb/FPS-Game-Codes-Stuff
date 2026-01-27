@@ -103,7 +103,7 @@ public class UpgradeApplier : MonoBehaviour
     {
         availableUpgrades.Clear();
 
-        // Common upgrades (10 copies each = ~1% each)
+        // Common upgrades (10 copies each)
         for (int i = 0; i < 10; i++)
         {
             availableUpgrades.Add(UpgradeType.MoveSpeed);
@@ -115,16 +115,15 @@ public class UpgradeApplier : MonoBehaviour
             availableUpgrades.Add(UpgradeType.FireRate);
         }
 
-        // Jump upgrade (5 copies - less common than movement)
+        // Jump upgrade (5 copies - less common)
         for (int i = 0; i < 5; i++)
         {
             availableUpgrades.Add(UpgradeType.JumpForce);
         }
 
-        // Healing (5 copies each)
+        // Max Health (5 copies)
         for (int i = 0; i < 5; i++)
         {
-            availableUpgrades.Add(UpgradeType.FullHeal);
             availableUpgrades.Add(UpgradeType.MaxHealth);
         }
 
@@ -139,6 +138,8 @@ public class UpgradeApplier : MonoBehaviour
         {
             availableUpgrades.Add(UpgradeType.AngelicBlunderbuss);
         }
+
+        // NOTE: FullHeal is NOT in pool - it's always shown on button 3
 
         if (showDebugInfo)
         {
