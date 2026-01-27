@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 /// <summary>
 /// Displays floor number, wave number, enemies remaining, and wave start notifications
@@ -41,14 +42,17 @@ public class FloorManagerUI : MonoBehaviour
             waveStartText.gameObject.SetActive(false);
         }
 
-        // Initialize display
+        // Hide UI initially (player is in lobby)
+        HideUI();
+
+        // Initialize display (even though hidden)
         UpdateFloorDisplay();
         UpdateWaveDisplay();
         UpdateEnemiesDisplay();
 
         if (showDebugInfo)
         {
-            Debug.Log("FloorManagerUI initialized!");
+            Debug.Log("FloorManagerUI initialized! UI hidden (waiting in lobby)");
         }
     }
 
@@ -105,38 +109,87 @@ public class FloorManagerUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Show "Wave X Start!" text
+    /// Show wave start text (doesn't change the text, just shows it with fade)
     /// </summary>
     public void ShowWaveStart()
     {
         if (waveStartText != null)
         {
-            waveStartText.text = $"Wave {currentWave} Start!";
+            // Don't change the text - just show it
             waveStartText.gameObject.SetActive(true);
             waveStartTimer = waveStartDisplayDuration;
 
+            // Start fade animation
+            StartCoroutine(FadeWaveStartText());
+
             if (showDebugInfo)
             {
-                Debug.Log($"Showing: Wave {currentWave} Start!");
+                Debug.Log("Showing wave start text with fade animation");
             }
         }
     }
 
     /// <summary>
-    /// Show "Wave X Start!" with custom text
+    /// Fade in and fade out animation for wave start text
+    /// </summary>
+    IEnumerator FadeWaveStartText()
+    {
+        if (waveStartText == null) yield break;
+
+        float fadeDuration = 0.5f; // Time to fade in/out
+        float displayTime = waveStartDisplayDuration - (fadeDuration * 2); // Time at full opacity
+
+        // Fade IN
+        float elapsed = 0f;
+        while (elapsed < fadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime; // Use unscaled in case game is paused
+            float alpha = Mathf.Clamp01(elapsed / fadeDuration);
+            SetTextAlpha(waveStartText, alpha);
+            yield return null;
+        }
+        SetTextAlpha(waveStartText, 1f); // Ensure fully visible
+
+        // STAY visible
+        yield return new WaitForSecondsRealtime(displayTime);
+
+        // Fade OUT
+        elapsed = 0f;
+        while (elapsed < fadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float alpha = Mathf.Clamp01(1f - (elapsed / fadeDuration));
+            SetTextAlpha(waveStartText, alpha);
+            yield return null;
+        }
+        SetTextAlpha(waveStartText, 0f); // Ensure fully transparent
+
+        // Hide the object
+        waveStartText.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// Helper to set text alpha (transparency)
+    /// </summary>
+    void SetTextAlpha(TMPro.TextMeshProUGUI text, float alpha)
+    {
+        if (text != null)
+        {
+            Color color = text.color;
+            color.a = alpha;
+            text.color = color;
+        }
+    }
+
+    /// <summary>
+    /// Show wave start text with custom text (for special waves)
     /// </summary>
     public void ShowWaveStart(string customText)
     {
         if (waveStartText != null)
         {
             waveStartText.text = customText;
-            waveStartText.gameObject.SetActive(true);
-            waveStartTimer = waveStartDisplayDuration;
-
-            if (showDebugInfo)
-            {
-                Debug.Log($"Showing: {customText}");
-            }
+            ShowWaveStart();
         }
     }
 
@@ -188,4 +241,34 @@ public class FloorManagerUI : MonoBehaviour
     public int GetCurrentFloor() => currentFloor;
     public int GetCurrentWave() => currentWave;
     public int GetEnemiesRemaining() => enemiesRemaining;
+
+    /// <summary>
+    /// Hide all UI elements (for lobby)
+    /// </summary>
+    public void HideUI()
+    {
+        if (floorText != null) floorText.gameObject.SetActive(false);
+        if (waveText != null) waveText.gameObject.SetActive(false);
+        if (enemiesRemainingText != null) enemiesRemainingText.gameObject.SetActive(false);
+
+        if (showDebugInfo)
+        {
+            Debug.Log("FloorManagerUI: UI hidden");
+        }
+    }
+
+    /// <summary>
+    /// Show all UI elements (when game starts)
+    /// </summary>
+    public void ShowUI()
+    {
+        if (floorText != null) floorText.gameObject.SetActive(true);
+        if (waveText != null) waveText.gameObject.SetActive(true);
+        if (enemiesRemainingText != null) enemiesRemainingText.gameObject.SetActive(true);
+
+        if (showDebugInfo)
+        {
+            Debug.Log("FloorManagerUI: UI shown");
+        }
+    }
 }
