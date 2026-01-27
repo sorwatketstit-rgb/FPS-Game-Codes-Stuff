@@ -10,6 +10,10 @@ public class PlayerShooting : MonoBehaviour
     [Range(0f, 1000f)]
     public float shootRange = 100f;
 
+    [Tooltip("Damage dealt per shot")]
+    [Range(1, 10)]
+    public int damagePerShot = 1;
+
     [Tooltip("Time between shots (lower = faster fire rate)")]
     [Range(0.001f, 3f)]
     public float fireRate = 0.5f;
@@ -144,8 +148,12 @@ public class PlayerShooting : MonoBehaviour
             EnemyHealth enemy = hit.collider.GetComponent<EnemyHealth>();
             if (enemy != null)
             {
-                enemy.TakeDamage();
-                Debug.Log($"Damaged enemy: {enemy.gameObject.name}");
+                // Deal damage based on damagePerShot
+                for (int i = 0; i < damagePerShot; i++)
+                {
+                    enemy.TakeDamage();
+                }
+                Debug.Log($"Damaged enemy: {enemy.gameObject.name} for {damagePerShot} damage");
             }
 
             // Visual debug
