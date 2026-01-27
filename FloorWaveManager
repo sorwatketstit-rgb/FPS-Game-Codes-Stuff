@@ -462,6 +462,12 @@ public class FloorWaveManager : MonoBehaviour
             Debug.Log($"=== FLOOR {currentFloor} COMPLETE! ALL WAVES CLEARED ===");
         }
 
+        // Show Floor Cleared text
+        if (floorUI != null)
+        {
+            floorUI.ShowFloorCleared();
+        }
+
         // Find and enable the elevator object
         EnableElevator();
     }
