@@ -269,13 +269,16 @@ public class UpgradeManagerUI : MonoBehaviour
         // Get available upgrades from applier
         List<UpgradeApplier.UpgradeType> availableUpgrades = upgradeApplier.GetAvailableUpgrades();
 
-        if (availableUpgrades.Count < 3)
+        if (availableUpgrades.Count < 2)
         {
             Debug.LogError("Not enough upgrades available!");
             return;
         }
 
-        // Shuffle
+        // Button 3 is ALWAYS Full Heal
+        selectedUpgrade3 = UpgradeApplier.UpgradeType.FullHeal;
+
+        // Shuffle for buttons 1 and 2
         List<UpgradeApplier.UpgradeType> shuffled = new List<UpgradeApplier.UpgradeType>(availableUpgrades);
         for (int i = shuffled.Count - 1; i > 0; i--)
         {
@@ -285,10 +288,26 @@ public class UpgradeManagerUI : MonoBehaviour
             shuffled[randomIndex] = temp;
         }
 
-        // Assign first 3
+        // Button 1: First shuffled upgrade
         selectedUpgrade1 = shuffled[0];
-        selectedUpgrade2 = shuffled[1];
-        selectedUpgrade3 = shuffled[2];
+
+        // Button 2: Find first upgrade that's DIFFERENT from button 1
+        selectedUpgrade2 = shuffled[0]; // Default (will be replaced)
+        for (int i = 1; i < shuffled.Count; i++)
+        {
+            if (shuffled[i] != selectedUpgrade1)
+            {
+                selectedUpgrade2 = shuffled[i];
+                break;
+            }
+        }
+
+        // Safety check: if somehow button 2 is still same as button 1
+        if (selectedUpgrade2 == selectedUpgrade1 && shuffled.Count > 1)
+        {
+            // Just pick the second item in shuffled list
+            selectedUpgrade2 = shuffled[1];
+        }
 
         // Update UI
         UpdateButtonSprite(upgradeButton1, selectedUpgrade1);
@@ -301,7 +320,7 @@ public class UpgradeManagerUI : MonoBehaviour
 
         if (showDebugInfo)
         {
-            Debug.Log($"Upgrades: {selectedUpgrade1}, {selectedUpgrade2}, {selectedUpgrade3}");
+            Debug.Log($"Upgrades: Button1={selectedUpgrade1}, Button2={selectedUpgrade2}, Button3={selectedUpgrade3} (Full Heal)");
         }
     }
 
