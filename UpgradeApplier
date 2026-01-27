@@ -26,6 +26,8 @@ public class UpgradeApplier : MonoBehaviour
     public int angelicBlunderbussDamage = 3;
     public float angelicBlunderbussRange = 50f;
     public float angelicBlunderbussFireRate = 0.75f;
+    [Tooltip("Recoil amount for Angelic Blunderbuss (shotgun-style recoil)")]
+    public float angelicBlunderbussRecoil = 15f;
     public GameObject normalGunModel;
     public GameObject angelicBlunderbussModel;
 
@@ -108,20 +110,29 @@ public class UpgradeApplier : MonoBehaviour
         {
             availableUpgrades.Add(UpgradeType.MoveSpeed);
             availableUpgrades.Add(UpgradeType.MaxSpeed);
+            availableUpgrades.Add(UpgradeType.Acceleration);
             availableUpgrades.Add(UpgradeType.SlideBoost);
             availableUpgrades.Add(UpgradeType.GroundDrag);
             availableUpgrades.Add(UpgradeType.AirDrag);
+            availableUpgrades.Add(UpgradeType.FireRate);
+        }
+
+        // Jump upgrade (5 copies - less common)
+        for (int i = 0; i < 5; i++)
+        {
             availableUpgrades.Add(UpgradeType.JumpForce);
         }
 
-        // 5 copies - less common
+        // Max Health (5 copies)
         for (int i = 0; i < 5; i++)
         {
             availableUpgrades.Add(UpgradeType.MaxHealth);
-            availableUpgrades.Add(UpgradeType.JumpForce);
+        }
+
+        // Score multiplier (5 copies)
+        for (int i = 0; i < 5; i++)
+        {
             availableUpgrades.Add(UpgradeType.ScoreMultiplier);
-            availableUpgrades.Add(UpgradeType.FireRate);
-            availableUpgrades.Add(UpgradeType.Acceleration);
         }
 
         // Angelic Blunderbuss (1 copy = ~1% chance)
@@ -235,7 +246,7 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.ScoreMultiplier:
                 return scoreMultiplierLevel < scoreMultiplierTiers.Length ? $"-> {scoreMultiplierTiers[scoreMultiplierLevel]} pts/kill" : "MAX LEVEL";
             case UpgradeType.AngelicBlunderbuss:
-                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "";
+                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "Dmg: 3 | Range: 50";
             default:
                 return "";
         }
@@ -330,8 +341,16 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.MaxHealth:
                 if (maxHealthLevel < maxHealthTiers.Length && playerHealth != null)
                 {
+                    // Increase max health
                     playerHealth.maxHitsPerLimb = maxHealthTiers[maxHealthLevel];
-                    if (showDebugInfo) Debug.Log($"Max Health -> {maxHealthTiers[maxHealthLevel]} hits/limb");
+
+                    // Heal all limbs by 1 (adds the extra health to existing limbs)
+                    for (int i = 0; i < 6; i++)
+                    {
+                        playerHealth.HealLimb(i);
+                    }
+
+                    if (showDebugInfo) Debug.Log($"Max Health -> {maxHealthTiers[maxHealthLevel]} hits/limb (all limbs healed +1)");
                     maxHealthLevel++;
                 }
                 break;
@@ -352,6 +371,7 @@ public class UpgradeApplier : MonoBehaviour
                     shootingScript.fireRate = angelicBlunderbussFireRate;
                     shootingScript.shootRange = angelicBlunderbussRange;
                     shootingScript.damagePerShot = angelicBlunderbussDamage;
+                    shootingScript.recoilAmount = angelicBlunderbussRecoil; // Set shotgun recoil
 
                     if (normalGunModel != null) normalGunModel.SetActive(false);
                     if (angelicBlunderbussModel != null) angelicBlunderbussModel.SetActive(true);
@@ -362,7 +382,7 @@ public class UpgradeApplier : MonoBehaviour
                     {
                         Debug.Log("========================================");
                         Debug.Log("ANGELIC BLUNDERBUSS ACQUIRED!");
-                        Debug.Log($"Damage: {angelicBlunderbussDamage} | Range: {angelicBlunderbussRange} | Fire Rate: {angelicBlunderbussFireRate}s");
+                        Debug.Log($"Damage: {angelicBlunderbussDamage} | Range: {angelicBlunderbussRange} | Fire Rate: {angelicBlunderbussFireRate}s | Recoil: {angelicBlunderbussRecoil}");
                         Debug.Log("========================================");
                     }
                 }
