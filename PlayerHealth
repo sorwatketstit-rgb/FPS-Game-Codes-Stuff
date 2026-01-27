@@ -11,6 +11,9 @@ public class PlayerHealth : MonoBehaviour
         public GameObject damagedImage;
         public GameObject disabledImage;
 
+        [Tooltip("Text to show hits remaining for this limb (e.g., '3')")]
+        public TMPro.TextMeshProUGUI hitsRemainingText;
+
         [HideInInspector] public int currentHits = 0;
     }
 
@@ -245,6 +248,16 @@ public class PlayerHealth : MonoBehaviour
                 Debug.Log($"{limb.limbName}: Showing DISABLED image ({limb.currentHits} hits)");
             }
         }
+
+        // Update per-limb counter (DECREASING: shows hits REMAINING)
+        if (limb.hitsRemainingText != null)
+        {
+            int hitsRemaining = maxHitsPerLimb - limb.currentHits;
+            limb.hitsRemainingText.text = hitsRemaining.ToString();
+
+            // Keep text white always (no color changes)
+            limb.hitsRemainingText.color = UnityEngine.Color.white;
+        }
     }
 
     void UpdateMovementSpeed()
@@ -294,16 +307,23 @@ public class PlayerHealth : MonoBehaviour
 
         LimbUI limb = allLimbs[limbIndex];
 
+        // Check if limb was disabled BEFORE healing
         bool wasDisabled = limb.currentHits >= maxHitsPerLimb;
 
-        // Reduce hits
+        // Reduce hits by 1
         limb.currentHits = Mathf.Max(0, limb.currentHits - 1);
 
-        // If limb was disabled and now isn't, update count
-        if (wasDisabled && limb.currentHits < maxHitsPerLimb)
+        // Check if limb is still disabled AFTER healing
+        bool isStillDisabled = limb.currentHits >= maxHitsPerLimb;
+
+        // If limb WAS disabled but now ISN'T, decrement disabled count
+        if (wasDisabled && !isStillDisabled)
         {
             disabledLimbCount--;
-            UpdateMovementSpeed();
+            if (showDebugInfo)
+            {
+                Debug.Log($"{limb.limbName} restored! Disabled limbs: {disabledLimbCount}/6");
+            }
         }
 
         UpdateLimbUI(limb);
@@ -311,6 +331,29 @@ public class PlayerHealth : MonoBehaviour
         if (showDebugInfo)
         {
             Debug.Log($"Healed {limb.limbName}! Hits: {limb.currentHits}/{maxHitsPerLimb}");
+        }
+    }
+
+    public void FullHealAllLimbs()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("=== FULL HEAL - Restoring all limbs! ===");
+        }
+
+        // Reset all limbs to 0 hits
+        foreach (var limb in allLimbs)
+        {
+            limb.currentHits = 0;
+            UpdateLimbUI(limb);
+        }
+
+        // Reset disabled count
+        disabledLimbCount = 0;
+
+        if (showDebugInfo)
+        {
+            Debug.Log("All limbs fully restored! Player at full health.");
         }
     }
 
@@ -340,7 +383,7 @@ public class PlayerHealth : MonoBehaviour
     {
         maxHitsPerLimb += additionalHits;
 
-        // Update all UI in case any limbs are now not disabled
+        // Update all UI (counters will show increased max)
         foreach (var limb in allLimbs)
         {
             UpdateLimbUI(limb);
@@ -357,4 +400,17 @@ public class PlayerHealth : MonoBehaviour
     public int GetDisabledLimbCount() => disabledLimbCount;
     public float GetCurrentSpeedMultiplier() => 1f - (disabledLimbCount * speedReductionPerLimb);
     public int GetLimbHits(int limbIndex) => limbIndex >= 0 && limbIndex < allLimbs.Length ? allLimbs[limbIndex].currentHits : 0;
+
+    /// <summary>
+    /// Get total hits remaining across all limbs (for other scripts if needed)
+    /// </summary>
+    public int GetTotalHitsRemaining()
+    {
+        int total = 0;
+        foreach (var limb in allLimbs)
+        {
+            total += maxHitsPerLimb - limb.currentHits;
+        }
+        return total;
+    }
 }
