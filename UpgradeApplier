@@ -112,8 +112,13 @@ public class UpgradeApplier : MonoBehaviour
             availableUpgrades.Add(UpgradeType.SlideBoost);
             availableUpgrades.Add(UpgradeType.GroundDrag);
             availableUpgrades.Add(UpgradeType.AirDrag);
-            availableUpgrades.Add(UpgradeType.JumpForce);
             availableUpgrades.Add(UpgradeType.FireRate);
+        }
+
+        // Jump upgrade (5 copies - less common than movement)
+        for (int i = 0; i < 5; i++)
+        {
+            availableUpgrades.Add(UpgradeType.JumpForce);
         }
 
         // Healing (5 copies each)
@@ -238,7 +243,7 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.ScoreMultiplier:
                 return scoreMultiplierLevel < scoreMultiplierTiers.Length ? $"-> {scoreMultiplierTiers[scoreMultiplierLevel]} pts/kill" : "MAX LEVEL";
             case UpgradeType.AngelicBlunderbuss:
-                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "LEGENDARY WEAPON";
+                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "Dmg: 3 | Range: 50";
             default:
                 return "";
         }
@@ -325,12 +330,7 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.FullHeal:
                 if (playerHealth != null)
                 {
-                    for (int i = 0; i < 6; i++)
-                    {
-                        playerHealth.HealLimb(i);
-                        playerHealth.HealLimb(i);
-                        playerHealth.HealLimb(i);
-                    }
+                    playerHealth.FullHealAllLimbs();
                     if (showDebugInfo) Debug.Log("FULL HEAL!");
                 }
                 break;
