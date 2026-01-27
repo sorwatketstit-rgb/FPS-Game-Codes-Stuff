@@ -15,19 +15,25 @@ public class UpgradeManager : MonoBehaviour
     [Tooltip("Pause manager (to disable pausing in upgrade room)")]
     public PauseManager pauseManager;
 
+    [Tooltip("Floor/Level manager - handles progression to next floor (optional if using trigger-based)")]
+    public MonoBehaviour floorManager;
+
     [Header("UI References")]
     [Tooltip("The 3 upgrade choice buttons")]
     public Button upgradeButton1;
     public Button upgradeButton2;
     public Button upgradeButton3;
 
-    [Tooltip("Continue button (already has onClick set up)")]
+    [Tooltip("Continue button - shows after upgrade selection (set onClick to next floor in Inspector)")]
     public GameObject continueButton;
 
     [Tooltip("Text labels for upgrade names (TextMeshPro) - Optional but recommended")]
     public TMPro.TextMeshProUGUI upgradeText1;
     public TMPro.TextMeshProUGUI upgradeText2;
     public TMPro.TextMeshProUGUI upgradeText3;
+
+    [Tooltip("Background blocker panel (prevents clicks going through to game world)")]
+    public GameObject uiBlockerPanel;
 
     [Header("Upgrade Button Images")]
     [Tooltip("Sprite images for each upgrade type (assign in Inspector)")]
@@ -39,6 +45,10 @@ public class UpgradeManager : MonoBehaviour
     public Sprite airDragSprite;
     public Sprite jumpForceSprite;
     public Sprite fireRateSprite;
+    public Sprite fullHealSprite;
+    public Sprite maxHealthSprite;
+    public Sprite scoreMultiplierSprite;
+    public Sprite angelicBlunderbussSprite;
 
     [Header("Upgrade Values - SETS to fixed values (not additive)")]
     [Tooltip("Move speed tiers - each upgrade picks next tier")]
@@ -65,6 +75,28 @@ public class UpgradeManager : MonoBehaviour
     [Tooltip("Fire rate tiers (LOWER = FASTER: 0.05=fast, 0.01=very fast, 0.001=ultra fast)")]
     public float[] fireRateTiers = { 0.05f, 0.01f, 0.001f };
 
+    [Tooltip("Max health tiers (increases max limb hits)")]
+    public int[] maxHealthTiers = { 4, 5, 6 }; // Increases from base 3 hits per limb
+
+    [Tooltip("Score multiplier tiers (points per kill)")]
+    public int[] scoreMultiplierTiers = { 10, 15, 20 }; // Base is 5, these are additional
+
+    [Header("Special Upgrades")]
+    [Tooltip("Angelic Blunderbuss damage (single tier - unique upgrade)")]
+    public int angelicBlunderbussDamage = 3;
+
+    [Tooltip("Angelic Blunderbuss range")]
+    public float angelicBlunderbussRange = 50f;
+
+    [Tooltip("Angelic Blunderbuss fire rate")]
+    public float angelicBlunderbussFireRate = 0.75f;
+
+    [Tooltip("Normal gun model (will be disabled when Angelic Blunderbuss is acquired)")]
+    public GameObject normalGunModel;
+
+    [Tooltip("Angelic Blunderbuss gun model (will be enabled when acquired)")]
+    public GameObject angelicBlunderbussModel;
+
     [Header("Particle Effect (Optional)")]
     [Tooltip("Particle effect to play when upgrade is selected")]
     public GameObject upgradeParticleEffect;
@@ -89,12 +121,17 @@ public class UpgradeManager : MonoBehaviour
     private int airDragLevel = 0;
     private int jumpForceLevel = 0;
     private int fireRateLevel = 0;
+    private int maxHealthLevel = 0;
+    private int scoreMultiplierLevel = 0;
+    private bool hasAngelicBlunderbuss = false; // One-time upgrade
     private bool hasSelectedUpgrade = false;
     private bool isPrewarming = false; // Track if we're prewarming
 
     // Components to disable
     private MomentumMovement movementScript;
     private PlayerShooting shootingScript;
+    private PlayerHealth playerHealth;
+    private ScoreManager scoreManager;
 
     // Enum for upgrade types
     public enum UpgradeType
@@ -106,7 +143,11 @@ public class UpgradeManager : MonoBehaviour
         GroundDrag,
         AirDrag,
         JumpForce,
-        FireRate
+        FireRate,
+        FullHeal,
+        MaxHealth,
+        ScoreMultiplier,
+        AngelicBlunderbuss
     }
 
     void Awake()
@@ -128,6 +169,7 @@ public class UpgradeManager : MonoBehaviour
         // Get player components
         movementScript = player.GetComponent<MomentumMovement>();
         shootingScript = player.GetComponent<PlayerShooting>();
+        playerHealth = player.GetComponent<PlayerHealth>();
 
         if (movementScript == null || shootingScript == null)
         {
@@ -136,24 +178,20 @@ public class UpgradeManager : MonoBehaviour
             return;
         }
 
+        if (playerHealth == null)
+        {
+            Debug.LogWarning("UpgradeManager: PlayerHealth not found! Healing upgrades won't work.");
+        }
+
+        // Find ScoreManager in scene
+        scoreManager = FindObjectOfType<ScoreManager>();
+        if (scoreManager == null)
+        {
+            Debug.LogWarning("UpgradeManager: ScoreManager not found! Score multiplier upgrades won't work.");
+        }
+
         // Set up button listeners (clear first to prevent duplicates)
-        if (upgradeButton1 != null)
-        {
-            upgradeButton1.onClick.RemoveAllListeners();
-            upgradeButton1.onClick.AddListener(() => SelectUpgrade(1));
-        }
-
-        if (upgradeButton2 != null)
-        {
-            upgradeButton2.onClick.RemoveAllListeners();
-            upgradeButton2.onClick.AddListener(() => SelectUpgrade(2));
-        }
-
-        if (upgradeButton3 != null)
-        {
-            upgradeButton3.onClick.RemoveAllListeners();
-            upgradeButton3.onClick.AddListener(() => SelectUpgrade(3));
-        }
+        SetupButtonListeners();
 
         // Hide continue button initially
         if (continueButton != null)
@@ -302,14 +340,45 @@ public class UpgradeManager : MonoBehaviour
     {
         // Add all upgrade types to the pool
         availableUpgrades.Clear();
-        availableUpgrades.Add(UpgradeType.MoveSpeed);
-        availableUpgrades.Add(UpgradeType.MaxSpeed);
-        availableUpgrades.Add(UpgradeType.Acceleration);
-        availableUpgrades.Add(UpgradeType.SlideBoost);
-        availableUpgrades.Add(UpgradeType.GroundDrag);
-        availableUpgrades.Add(UpgradeType.AirDrag);
-        availableUpgrades.Add(UpgradeType.JumpForce);
-        availableUpgrades.Add(UpgradeType.FireRate);
+
+        // Common upgrades (add multiple copies for higher chance)
+        // Each upgrade added = 1/total pool size probability
+        for (int i = 0; i < 10; i++) // 10 copies each = common
+        {
+            availableUpgrades.Add(UpgradeType.MoveSpeed);
+            availableUpgrades.Add(UpgradeType.MaxSpeed);
+            availableUpgrades.Add(UpgradeType.Acceleration);
+            availableUpgrades.Add(UpgradeType.SlideBoost);
+            availableUpgrades.Add(UpgradeType.GroundDrag);
+            availableUpgrades.Add(UpgradeType.AirDrag);
+            availableUpgrades.Add(UpgradeType.JumpForce);
+            availableUpgrades.Add(UpgradeType.FireRate);
+        }
+
+        // Healing upgrades (5 copies = less common)
+        for (int i = 0; i < 5; i++)
+        {
+            availableUpgrades.Add(UpgradeType.FullHeal);
+            availableUpgrades.Add(UpgradeType.MaxHealth);
+        }
+
+        // Score multiplier (5 copies = less common)
+        for (int i = 0; i < 5; i++)
+        {
+            availableUpgrades.Add(UpgradeType.ScoreMultiplier);
+        }
+
+        if (!hasAngelicBlunderbuss)
+        {
+            availableUpgrades.Add(UpgradeType.AngelicBlunderbuss);
+        }
+
+        if (showDebugInfo)
+        {
+            int angelicCount = hasAngelicBlunderbuss ? 0 : 1;
+            float angelicChance = angelicCount > 0 ? (angelicCount / (float)availableUpgrades.Count) * 100f : 0f;
+            Debug.Log($"Upgrade pool: {availableUpgrades.Count} entries | Angelic Blunderbuss: {angelicChance:F2}% per slot");
+        }
     }
 
     void PrepareUpgradeRoom()
@@ -335,6 +404,14 @@ public class UpgradeManager : MonoBehaviour
         else
         {
             Debug.LogWarning("PauseManager reference not set! Cannot disable pausing in upgrade room. Assign it in UpgradeManager Inspector.");
+        }
+
+        // Pause game time (freezes timer and animations)
+        Time.timeScale = 0f;
+
+        if (showDebugInfo)
+        {
+            Debug.Log("Game time PAUSED (Time.timeScale = 0)");
         }
 
         // Disable player controls
@@ -363,9 +440,6 @@ public class UpgradeManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        // Reset selection state
-        hasSelectedUpgrade = false;
-
         if (showDebugInfo)
         {
             Debug.Log($"hasSelectedUpgrade reset to FALSE - buttons should work now!");
@@ -381,10 +455,13 @@ public class UpgradeManager : MonoBehaviour
         if (upgradeText2 != null) upgradeText2.gameObject.SetActive(true);
         if (upgradeText3 != null) upgradeText3.gameObject.SetActive(true);
 
+        // Show UI blocker to prevent clicks going through
+        if (uiBlockerPanel != null) uiBlockerPanel.SetActive(true);
+
         if (showDebugInfo)
         {
             Debug.Log("Upgrade buttons set to ACTIVE");
-        };
+        }
 
         // Hide continue button
         if (continueButton != null)
@@ -407,6 +484,14 @@ public class UpgradeManager : MonoBehaviour
         if (pauseManager != null)
         {
             pauseManager.SetCanPause(true);
+        }
+
+        // Resume game time
+        Time.timeScale = 1f;
+
+        if (showDebugInfo)
+        {
+            Debug.Log("Game time RESUMED (Time.timeScale = 1)");
         }
 
         // Re-enable player controls
@@ -438,15 +523,87 @@ public class UpgradeManager : MonoBehaviour
 
     void RandomizeUpgrades()
     {
-        // Make sure we have at least 3 upgrades available
-        if (availableUpgrades.Count < 3)
+        // Build list of upgrades that are NOT at max level
+        List<UpgradeType> availableNonMaxUpgrades = new List<UpgradeType>();
+
+        foreach (var upgrade in availableUpgrades)
         {
-            Debug.LogError("UpgradeManager: Need at least 3 upgrade types! Only have " + availableUpgrades.Count);
+            bool isMaxed = false;
+
+            switch (upgrade)
+            {
+                case UpgradeType.MoveSpeed:
+                    isMaxed = moveSpeedLevel >= moveSpeedTiers.Length;
+                    break;
+                case UpgradeType.MaxSpeed:
+                    isMaxed = maxSpeedLevel >= maxSpeedTiers.Length;
+                    break;
+                case UpgradeType.Acceleration:
+                    isMaxed = accelerationLevel >= accelerationTiers.Length;
+                    break;
+                case UpgradeType.SlideBoost:
+                    isMaxed = slideBoostLevel >= slideBoostTiers.Length;
+                    break;
+                case UpgradeType.GroundDrag:
+                    isMaxed = groundDragLevel >= groundDragTiers.Length;
+                    break;
+                case UpgradeType.AirDrag:
+                    isMaxed = airDragLevel >= airDragTiers.Length;
+                    break;
+                case UpgradeType.JumpForce:
+                    isMaxed = jumpForceLevel >= jumpForceTiers.Length;
+                    break;
+                case UpgradeType.FireRate:
+                    isMaxed = fireRateLevel >= fireRateTiers.Length;
+                    break;
+                case UpgradeType.FullHeal:
+                    isMaxed = false; // Can always heal
+                    break;
+                case UpgradeType.MaxHealth:
+                    isMaxed = maxHealthLevel >= maxHealthTiers.Length;
+                    break;
+                case UpgradeType.ScoreMultiplier:
+                    isMaxed = scoreMultiplierLevel >= scoreMultiplierTiers.Length;
+                    break;
+                case UpgradeType.AngelicBlunderbuss:
+                    isMaxed = hasAngelicBlunderbuss; // One-time upgrade
+                    break;
+            }
+
+            if (!isMaxed)
+            {
+                availableNonMaxUpgrades.Add(upgrade);
+            }
+        }
+
+        // If less than 3 upgrades available, pad with maxed upgrades
+        if (availableNonMaxUpgrades.Count < 3)
+        {
+            if (showDebugInfo)
+            {
+                Debug.Log($"Only {availableNonMaxUpgrades.Count} upgrades available - padding with maxed upgrades");
+            }
+
+            // Pad with maxed upgrades to fill 3 slots
+            foreach (var upgrade in availableUpgrades)
+            {
+                if (availableNonMaxUpgrades.Count >= 3) break;
+                if (!availableNonMaxUpgrades.Contains(upgrade))
+                {
+                    availableNonMaxUpgrades.Add(upgrade);
+                }
+            }
+        }
+
+        // Make sure we have at least 3 upgrades total
+        if (availableNonMaxUpgrades.Count < 3)
+        {
+            Debug.LogError("UpgradeManager: Not enough upgrade types! Need at least 3.");
             return;
         }
 
         // Shuffle and pick 3 unique upgrades
-        List<UpgradeType> shuffled = new List<UpgradeType>(availableUpgrades);
+        List<UpgradeType> shuffled = new List<UpgradeType>(availableNonMaxUpgrades);
 
         // Fisher-Yates shuffle
         for (int i = shuffled.Count - 1; i > 0; i--)
@@ -472,7 +629,7 @@ public class UpgradeManager : MonoBehaviour
         UpdateButtonText(upgradeText2, selectedUpgrade2);
         UpdateButtonText(upgradeText3, selectedUpgrade3);
 
-        // Warn once if all sprites are the same (only check after all buttons updated)
+        // Warn once if all sprites are the same
         if (showDebugInfo && moveSpeedSprite != null && moveSpeedSprite == maxSpeedSprite && maxSpeedSprite == accelerationSprite)
         {
             Debug.LogWarning("WARNING: All upgrade sprites appear to be the same! Assign unique sprites for each upgrade type in UpgradeManager Inspector.");
@@ -528,12 +685,24 @@ public class UpgradeManager : MonoBehaviour
             case UpgradeType.FireRate:
                 spriteToAssign = fireRateSprite;
                 break;
+            case UpgradeType.FullHeal:
+                spriteToAssign = fullHealSprite;
+                break;
+            case UpgradeType.MaxHealth:
+                spriteToAssign = maxHealthSprite;
+                break;
+            case UpgradeType.ScoreMultiplier:
+                spriteToAssign = scoreMultiplierSprite;
+                break;
+            case UpgradeType.AngelicBlunderbuss:
+                spriteToAssign = angelicBlunderbussSprite;
+                break;
         }
 
         if (spriteToAssign != null)
         {
             buttonImage.sprite = spriteToAssign;
-            if (showDetailedLogs) // Changed from showDebugInfo
+            if (showDetailedLogs)
             {
                 Debug.Log($"Button {button.name}: Assigned {upgradeType} sprite (Sprite name: '{spriteToAssign.name}')");
             }
@@ -602,6 +771,7 @@ public class UpgradeManager : MonoBehaviour
         if (upgradeText2 != null) upgradeText2.gameObject.SetActive(false);
         if (upgradeText3 != null) upgradeText3.gameObject.SetActive(false);
 
+        // Show continue button (you'll manually add next floor onClick in Inspector)
         if (continueButton != null)
         {
             continueButton.SetActive(true);
@@ -609,7 +779,30 @@ public class UpgradeManager : MonoBehaviour
 
         if (showDebugInfo)
         {
-            Debug.Log("=== UPGRADE SELECTION COMPLETE ===");
+            Debug.Log("=== UPGRADE SELECTION COMPLETE - Continue button shown ===");
+        }
+    }
+
+    /// <summary>
+    /// PUBLIC METHOD: Call this from Continue Button's onClick to close upgrade room and unpause
+    /// In Inspector: Continue Button -> OnClick() -> UpgradeManager.CloseUpgradeRoom()
+    /// </summary>
+    public void CloseUpgradeRoom()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("CloseUpgradeRoom() called - closing upgrade UI and unpausing game");
+        }
+
+        // Hide UI blocker
+        if (uiBlockerPanel != null) uiBlockerPanel.SetActive(false);
+
+        // Close the upgrade room (this triggers OnDisable which unpauses)
+        gameObject.SetActive(false);
+
+        if (showDebugInfo)
+        {
+            Debug.Log("Upgrade room closed!");
         }
     }
 
@@ -619,44 +812,138 @@ public class UpgradeManager : MonoBehaviour
 
         string upgradeName = "";
         string upgradeDesc = "";
+        bool isMaxLevel = false;
 
         switch (upgradeType)
         {
             case UpgradeType.MoveSpeed:
                 upgradeName = "Movement Speed";
-                upgradeDesc = moveSpeedLevel < moveSpeedTiers.Length ? $" > {moveSpeedTiers[moveSpeedLevel]}" : "(MAX)";
+                if (moveSpeedLevel < moveSpeedTiers.Length)
+                    upgradeDesc = $" -> {moveSpeedTiers[moveSpeedLevel]}";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
                 break;
             case UpgradeType.MaxSpeed:
                 upgradeName = "Max Speed";
-                upgradeDesc = maxSpeedLevel < maxSpeedTiers.Length ? $" > {maxSpeedTiers[maxSpeedLevel]}" : "(MAX)";
+                if (maxSpeedLevel < maxSpeedTiers.Length)
+                    upgradeDesc = $" -> {maxSpeedTiers[maxSpeedLevel]}";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
                 break;
             case UpgradeType.Acceleration:
                 upgradeName = "Acceleration";
-                upgradeDesc = accelerationLevel < accelerationTiers.Length ? $" > {accelerationTiers[accelerationLevel]}" : "(MAX)";
+                if (accelerationLevel < accelerationTiers.Length)
+                    upgradeDesc = $" -> {accelerationTiers[accelerationLevel]}";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
                 break;
             case UpgradeType.SlideBoost:
                 upgradeName = "Slide Boost";
-                upgradeDesc = slideBoostLevel < slideBoostTiers.Length ? $" > {slideBoostTiers[slideBoostLevel]}" : "(MAX)";
+                if (slideBoostLevel < slideBoostTiers.Length)
+                    upgradeDesc = $" -> {slideBoostTiers[slideBoostLevel]}";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
                 break;
             case UpgradeType.GroundDrag:
                 upgradeName = "Ground Friction";
-                upgradeDesc = groundDragLevel < groundDragTiers.Length ? $" > {groundDragTiers[groundDragLevel]}" : "(MAX)";
+                if (groundDragLevel < groundDragTiers.Length)
+                    upgradeDesc = $" -> {groundDragTiers[groundDragLevel]}";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
                 break;
             case UpgradeType.AirDrag:
                 upgradeName = "Air Control";
-                upgradeDesc = airDragLevel < airDragTiers.Length ? $" > {airDragTiers[airDragLevel]}" : "(MAX)";
+                if (airDragLevel < airDragTiers.Length)
+                    upgradeDesc = $" -> {airDragTiers[airDragLevel]}";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
                 break;
             case UpgradeType.JumpForce:
                 upgradeName = "Jump Height";
-                upgradeDesc = jumpForceLevel < jumpForceTiers.Length ? $" > {jumpForceTiers[jumpForceLevel]}" : "(MAX)";
+                if (jumpForceLevel < jumpForceTiers.Length)
+                    upgradeDesc = $" -> {jumpForceTiers[jumpForceLevel]}";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
                 break;
             case UpgradeType.FireRate:
                 upgradeName = "Fire Rate";
-                upgradeDesc = fireRateLevel < fireRateTiers.Length ? $" > {fireRateTiers[fireRateLevel]}s" : "(MAX)";
+                if (fireRateLevel < fireRateTiers.Length)
+                    upgradeDesc = $" -> {fireRateTiers[fireRateLevel]}s";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
+                break;
+            case UpgradeType.FullHeal:
+                upgradeName = "Full Heal";
+                upgradeDesc = "Restore All Limbs";
+                isMaxLevel = false; // Can always use
+                break;
+            case UpgradeType.MaxHealth:
+                upgradeName = "Max Health";
+                if (maxHealthLevel < maxHealthTiers.Length)
+                    upgradeDesc = $" > {maxHealthTiers[maxHealthLevel]} hits/limb";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
+                break;
+            case UpgradeType.ScoreMultiplier:
+                upgradeName = "Score Multiplier";
+                if (scoreMultiplierLevel < scoreMultiplierTiers.Length)
+                    upgradeDesc = $" > {scoreMultiplierTiers[scoreMultiplierLevel]} pts/kill";
+                else
+                {
+                    upgradeDesc = "MAX LEVEL";
+                    isMaxLevel = true;
+                }
+                break;
+            case UpgradeType.AngelicBlunderbuss:
+                upgradeName = "Angelic Blunderbuss";
+                if (!hasAngelicBlunderbuss)
+                    upgradeDesc = "LEGENDARY WEAPON";
+                else
+                {
+                    upgradeDesc = "ALREADY OWNED";
+                    isMaxLevel = true;
+                }
                 break;
         }
 
         textLabel.text = $"{upgradeName}\n{upgradeDesc}";
+
+        // Change text color if max level (gold for MAX)
+        if (isMaxLevel)
+        {
+            textLabel.color = new Color(1f, 0.84f, 0f); // Gold color
+        }
+        else
+        {
+            textLabel.color = Color.white; // Normal white
+        }
     }
 
     void ApplyUpgrade(UpgradeType upgradeType)
@@ -674,7 +961,7 @@ public class UpgradeManager : MonoBehaviour
                 }
                 else
                 {
-                    if (showDebugInfo) Debug.Log("Move Speed already at max level!");
+                    if (showDebugInfo) Debug.Log("Move Speed already at MAX level! No upgrade applied.");
                 }
                 break;
 
@@ -685,6 +972,10 @@ public class UpgradeManager : MonoBehaviour
                     if (showDebugInfo) Debug.Log($"Applied: Max Speed SET to {maxSpeedTiers[maxSpeedLevel]} (Level {maxSpeedLevel + 1})");
                     maxSpeedLevel++;
                 }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Max Speed already at MAX level! No upgrade applied.");
+                }
                 break;
 
             case UpgradeType.Acceleration:
@@ -693,6 +984,10 @@ public class UpgradeManager : MonoBehaviour
                     movementScript.acceleration = accelerationTiers[accelerationLevel];
                     if (showDebugInfo) Debug.Log($"Applied: Acceleration SET to {accelerationTiers[accelerationLevel]} (Level {accelerationLevel + 1})");
                     accelerationLevel++;
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Acceleration already at MAX level! No upgrade applied.");
                 }
                 break;
 
@@ -703,6 +998,10 @@ public class UpgradeManager : MonoBehaviour
                     if (showDebugInfo) Debug.Log($"Applied: Slide Boost SET to {slideBoostTiers[slideBoostLevel]} (Level {slideBoostLevel + 1})");
                     slideBoostLevel++;
                 }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Slide Boost already at MAX level! No upgrade applied.");
+                }
                 break;
 
             case UpgradeType.GroundDrag:
@@ -711,6 +1010,10 @@ public class UpgradeManager : MonoBehaviour
                     movementScript.groundDrag = groundDragTiers[groundDragLevel];
                     if (showDebugInfo) Debug.Log($"Applied: Ground Drag SET to {groundDragTiers[groundDragLevel]} (Level {groundDragLevel + 1})");
                     groundDragLevel++;
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Ground Drag already at MAX level! No upgrade applied.");
                 }
                 break;
 
@@ -721,6 +1024,10 @@ public class UpgradeManager : MonoBehaviour
                     if (showDebugInfo) Debug.Log($"Applied: Air Drag SET to {airDragTiers[airDragLevel]} (Level {airDragLevel + 1})");
                     airDragLevel++;
                 }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Air Drag already at MAX level! No upgrade applied.");
+                }
                 break;
 
             case UpgradeType.JumpForce:
@@ -730,6 +1037,10 @@ public class UpgradeManager : MonoBehaviour
                     if (showDebugInfo) Debug.Log($"Applied: Jump Force SET to {jumpForceTiers[jumpForceLevel]} (Level {jumpForceLevel + 1})");
                     jumpForceLevel++;
                 }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Jump Force already at MAX level! No upgrade applied.");
+                }
                 break;
 
             case UpgradeType.FireRate:
@@ -738,6 +1049,97 @@ public class UpgradeManager : MonoBehaviour
                     shootingScript.fireRate = fireRateTiers[fireRateLevel];
                     if (showDebugInfo) Debug.Log($"Applied: Fire Rate SET to {fireRateTiers[fireRateLevel]} (Level {fireRateLevel + 1}) - FASTER SHOOTING!");
                     fireRateLevel++;
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Fire Rate already at MAX level! No upgrade applied.");
+                }
+                break;
+
+            case UpgradeType.FullHeal:
+                if (playerHealth != null)
+                {
+                    // Heal all limbs completely
+                    for (int i = 0; i < 6; i++)
+                    {
+                        playerHealth.HealLimb(i);
+                        playerHealth.HealLimb(i); // Heal twice to ensure full heal
+                        playerHealth.HealLimb(i); // Heal three times to be safe
+                    }
+                    if (showDebugInfo) Debug.Log("Applied: FULL HEAL - All limbs restored!");
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.LogWarning("PlayerHealth not found! Cannot apply Full Heal.");
+                }
+                break;
+
+            case UpgradeType.MaxHealth:
+                if (maxHealthLevel < maxHealthTiers.Length && playerHealth != null)
+                {
+                    playerHealth.maxHitsPerLimb = maxHealthTiers[maxHealthLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Max Health SET to {maxHealthTiers[maxHealthLevel]} hits per limb (Level {maxHealthLevel + 1})");
+                    maxHealthLevel++;
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Max Health already at MAX level! No upgrade applied.");
+                }
+                break;
+
+            case UpgradeType.ScoreMultiplier:
+                if (scoreMultiplierLevel < scoreMultiplierTiers.Length && scoreManager != null)
+                {
+                    scoreManager.pointsPerKill = scoreMultiplierTiers[scoreMultiplierLevel];
+                    if (showDebugInfo) Debug.Log($"Applied: Score Multiplier SET to {scoreMultiplierTiers[scoreMultiplierLevel]} points per kill (Level {scoreMultiplierLevel + 1})");
+                    scoreMultiplierLevel++;
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Score Multiplier already at MAX level! No upgrade applied.");
+                }
+                break;
+
+            case UpgradeType.AngelicBlunderbuss:
+                if (!hasAngelicBlunderbuss)
+                {
+                    // Max out fire rate first
+                    fireRateLevel = fireRateTiers.Length;
+
+                    // Set to Angelic Blunderbuss stats
+                    shootingScript.fireRate = angelicBlunderbussFireRate;
+                    shootingScript.shootRange = angelicBlunderbussRange;
+                    shootingScript.damagePerShot = angelicBlunderbussDamage;
+
+                    // Swap gun models
+                    if (normalGunModel != null)
+                    {
+                        normalGunModel.SetActive(false);
+                        if (showDebugInfo) Debug.Log("Normal gun model DISABLED");
+                    }
+
+                    if (angelicBlunderbussModel != null)
+                    {
+                        angelicBlunderbussModel.SetActive(true);
+                        if (showDebugInfo) Debug.Log("Angelic Blunderbuss model ENABLED");
+                    }
+
+                    hasAngelicBlunderbuss = true;
+
+                    if (showDebugInfo)
+                    {
+                        Debug.Log("========================================");
+                        Debug.Log("ANGELIC BLUNDERBUSS ACQUIRED!");
+                        Debug.Log($"Fire Rate: {angelicBlunderbussFireRate}s");
+                        Debug.Log($"Damage: {angelicBlunderbussDamage}");
+                        Debug.Log($"Range: {angelicBlunderbussRange}");
+                        Debug.Log("Gun model swapped!");
+                        Debug.Log("========================================");
+                    }
+                }
+                else
+                {
+                    if (showDebugInfo) Debug.Log("Angelic Blunderbuss already owned!");
                 }
                 break;
         }
@@ -755,10 +1157,34 @@ public class UpgradeManager : MonoBehaviour
         airDragLevel = 0;
         jumpForceLevel = 0;
         fireRateLevel = 0;
+        maxHealthLevel = 0;
+        scoreMultiplierLevel = 0;
+        hasAngelicBlunderbuss = false;
 
         if (showDebugInfo)
         {
             Debug.Log("All upgrade levels reset to 0!");
         }
+    }
+
+    /// <summary>
+    /// PUBLIC METHOD: Call this from the Continue button's onClick to close upgrade room
+    /// This will unpause the game and re-enable player controls
+    /// </summary>
+    public void CloseUpgradeRoom()
+    {
+        if (showDebugInfo)
+        {
+            Debug.Log("CloseUpgradeRoom called - closing upgrade room!");
+        }
+
+        // Hide UI blocker
+        if (uiBlockerPanel != null) uiBlockerPanel.SetActive(false);
+
+        // Hide continue button
+        if (continueButton != null) continueButton.SetActive(false);
+
+        // Close upgrade room (triggers OnDisable which unpauses)
+        gameObject.SetActive(false);
     }
 }
