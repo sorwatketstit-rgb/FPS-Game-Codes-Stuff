@@ -59,6 +59,7 @@ public class ScoreManager : MonoBehaviour
         if (deathScreenUI != null)
         {
             deathScreenUI.SetActive(false);
+            scoreText.gameObject.SetActive(false);
         }
 
         // Initialize score display
@@ -212,5 +213,10 @@ public class ScoreManager : MonoBehaviour
 
         // Load main menu scene
         SceneManager.LoadScene(mainMenuSceneName);
+    }
+
+    public void ShowUI()
+    {
+        if (scoreText != null) scoreText.gameObject.SetActive(true);
     }
 }
