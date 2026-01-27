@@ -9,28 +9,45 @@ public class EnemyHealth : MonoBehaviour
     [Tooltip("Maximum health")]
     public int maxHealth = 3;
 
-    [Header("Death Effects (Optional)")]
-    [Tooltip("Particle effect to spawn on death")]
-    public GameObject deathEffect;
+    [Header("Audio")]
+    [Tooltip("Audio clip to play when hit")]
+    public AudioClip hitSound;
 
     [Tooltip("Audio clip to play on death")]
     public AudioClip deathSound;
 
-    [Tooltip("Audio source (will find one if not assigned)")]
-    public AudioSource audioSource;
+    [Tooltip("Volume for hit sound (0-1)")]
+    [Range(0f, 1f)]
+    public float hitSoundVolume = 0.7f;
+
+    [Tooltip("Volume for death sound (0-1)")]
+    [Range(0f, 1f)]
+    public float deathSoundVolume = 1f;
+
+    [Header("Death Effects (Optional)")]
+    [Tooltip("Particle effect to spawn on death")]
+    public GameObject deathEffect;
 
     [Header("Debug")]
     public bool showDebugInfo = true;
+
+    // Private
+    private Transform playerTransform;
 
     void Start()
     {
         // Initialize health
         currentHealth = maxHealth;
 
-        // Find audio source if not assigned
-        if (audioSource == null)
+        // Find player
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
         {
-            audioSource = GetComponent<AudioSource>();
+            playerTransform = player.transform;
+        }
+        else
+        {
+            Debug.LogWarning($"{gameObject.name}: Player not found! Sounds will play at enemy position.");
         }
     }
 
@@ -44,6 +61,13 @@ public class EnemyHealth : MonoBehaviour
         if (showDebugInfo)
         {
             Debug.Log($"{gameObject.name} took {damageAmount} damage. Health: {currentHealth}/{maxHealth}");
+        }
+
+        // Play hit sound at player location (only if still alive after damage)
+        if (currentHealth > 0 && hitSound != null)
+        {
+            Vector3 soundPosition = playerTransform != null ? playerTransform.position : transform.position;
+            AudioSource.PlayClipAtPoint(hitSound, soundPosition, hitSoundVolume);
         }
 
         // Check if dead
@@ -76,11 +100,11 @@ public class EnemyHealth : MonoBehaviour
             Instantiate(deathEffect, transform.position, Quaternion.identity);
         }
 
-        // Play death sound
-        if (deathSound != null && audioSource != null)
+        // Play death sound at player location
+        if (deathSound != null)
         {
-            // Play sound at position (so it's not destroyed immediately)
-            AudioSource.PlayClipAtPoint(deathSound, transform.position);
+            Vector3 soundPosition = playerTransform != null ? playerTransform.position : transform.position;
+            AudioSource.PlayClipAtPoint(deathSound, soundPosition, deathSoundVolume);
         }
 
         // Destroy enemy
