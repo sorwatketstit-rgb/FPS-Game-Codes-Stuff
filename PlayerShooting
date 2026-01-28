@@ -52,6 +52,14 @@ public class PlayerShooting : MonoBehaviour
     [Range(1f, 20f)]
     public float recoilRecoverySpeed = 10f;
 
+    [Header("Hit Marker UI")]
+    [Tooltip("UI element to flash when enemy is hit (e.g., crosshair hit marker)")]
+    public GameObject hitMarkerUI;
+
+    [Tooltip("How long to show hit marker")]
+    [Range(0.05f, 0.5f)]
+    public float hitMarkerDuration = 0.1f;
+
     [Header("Sound Effects")]
     [Tooltip("Audio source for gunshot sound")]
     public AudioSource gunAudio;
@@ -71,6 +79,7 @@ public class PlayerShooting : MonoBehaviour
     private float nextFireTime = 0f;
     private bool isZoomed = false;
     private float muzzleFlashTimer = 0f;
+    private float hitMarkerTimer = 0f;
     private Vector3 gunOriginalPosition;
     private Vector3 gunCurrentRecoil;
     private float normalFOV = 60f; // Store normal FOV when entering zoom
@@ -105,6 +114,12 @@ public class PlayerShooting : MonoBehaviour
             muzzleFlash.SetActive(false);
         }
 
+        // Make sure hit marker starts disabled
+        if (hitMarkerUI != null)
+        {
+            hitMarkerUI.SetActive(false);
+        }
+
         Debug.Log("Shooting System Ready! Left Click - Shoot | Right Click - Zoom");
     }
 
@@ -114,6 +129,7 @@ public class PlayerShooting : MonoBehaviour
         HandleZoom();
         HandleMuzzleFlash();
         HandleGunRecoil();
+        HandleHitMarker();
     }
 
     void HandleShooting()
@@ -153,6 +169,10 @@ public class PlayerShooting : MonoBehaviour
                 {
                     enemy.TakeDamage();
                 }
+
+                // Trigger hit marker
+                TriggerHitMarker();
+
                 Debug.Log($"Damaged enemy: {enemy.gameObject.name} for {damagePerShot} damage");
             }
 
@@ -222,6 +242,29 @@ public class PlayerShooting : MonoBehaviour
             if (muzzleFlashTimer <= 0f && muzzleFlash != null)
             {
                 muzzleFlash.SetActive(false);
+            }
+        }
+    }
+
+    void TriggerHitMarker()
+    {
+        if (hitMarkerUI != null)
+        {
+            hitMarkerUI.SetActive(true);
+            hitMarkerTimer = hitMarkerDuration;
+        }
+    }
+
+    void HandleHitMarker()
+    {
+        if (hitMarkerTimer > 0f)
+        {
+            hitMarkerTimer -= Time.deltaTime;
+
+            // Disable hit marker when timer runs out
+            if (hitMarkerTimer <= 0f && hitMarkerUI != null)
+            {
+                hitMarkerUI.SetActive(false);
             }
         }
     }
