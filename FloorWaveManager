@@ -73,12 +73,18 @@ public class FloorWaveManager : MonoBehaviour
     [Header("ScoreManagerUI")]
     public ScoreManager scoreUI;
 
+    [Header("Elevator Object")]
+    public GameObject ElevatorSpawn;
+
     [Header("Lobby")]
     [Tooltip("Lobby elevator trigger (for starting first floor from lobby)")]
     public ElevatorTrigger lobbyElevator;
 
     [Header("Debug")]
     public bool showDebugInfo = true;
+
+    [Header("Sun Change")]
+    public GameObject SunChange;
 
     // Private variables
     private int currentFloor = 1;
@@ -177,6 +183,9 @@ public class FloorWaveManager : MonoBehaviour
             Debug.Log($"Floor {currentFloor} will have {totalWavesThisFloor} wave(s)");
         }
 
+        // Set some timeline
+        SunChange.SetActive(true);
+
         // Spawn map and start waves
         StartCoroutine(StartFloorSequence());
     }
@@ -197,8 +206,11 @@ public class FloorWaveManager : MonoBehaviour
         // Teleport player to global spawn
         TeleportPlayerToGlobalSpawn();
 
+        // Set elevator to spawn
+        ElevatorSpawn.SetActive(true);
+
         // Wait then start first wave
-        yield return new WaitForSeconds(1f);
+        yield return new WaitForSeconds(0.25f);
 
         StartWave();
     }
@@ -314,6 +326,9 @@ public class FloorWaveManager : MonoBehaviour
         {
             playerCC.enabled = true;
         }
+
+        // Set rotation
+        player.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
         if (showDebugInfo)
         {
@@ -595,6 +610,7 @@ public class FloorWaveManager : MonoBehaviour
             if (upgradeRoom != null)
             {
                 upgradeRoom.SetActive(true);
+                ElevatorSpawn.SetActive(false);
 
                 // Teleport player to upgrade room spawn
                 if (upgradeRoomPlayerSpawn != null && player != null)
@@ -671,8 +687,18 @@ public class FloorWaveManager : MonoBehaviour
         // Step 4: Teleport player to global spawn
         TeleportPlayerToGlobalSpawn();
 
+        // Enable elevator spawn for this floor (FIX: was missing!)
+        if (ElevatorSpawn != null)
+        {
+            ElevatorSpawn.SetActive(true);
+            if (showDebugInfo)
+            {
+                Debug.Log("Elevator spawn enabled for new floor");
+            }
+        }
+
         // Step 5: Wait a bit, then start waves
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(1f);
 
         StartWave();
     }
