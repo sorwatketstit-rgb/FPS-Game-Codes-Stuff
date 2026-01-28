@@ -46,6 +46,8 @@ public class UpgradeManagerUI : MonoBehaviour
     public Sprite maxHealthSprite;
     public Sprite scoreMultiplierSprite;
     public Sprite angelicBlunderbussSprite;
+    public Sprite lessGravitySprite;
+    public Sprite angelWingsSprite;
 
     [Header("Particle Effect (Optional)")]
     public GameObject upgradeParticleEffect;
@@ -55,12 +57,10 @@ public class UpgradeManagerUI : MonoBehaviour
     [Tooltip("Show detailed logs")]
     public bool showDetailedLogs = false;
 
-    // References
     private UpgradeApplier upgradeApplier;
     private MomentumMovement movementScript;
     private PlayerShooting shootingScript;
 
-    // State
     private UpgradeApplier.UpgradeType selectedUpgrade1;
     private UpgradeApplier.UpgradeType selectedUpgrade2;
     private UpgradeApplier.UpgradeType selectedUpgrade3;
@@ -69,7 +69,6 @@ public class UpgradeManagerUI : MonoBehaviour
 
     void Awake()
     {
-        // Get the UpgradeApplier component (should be on same GameObject)
         upgradeApplier = GetComponent<UpgradeApplier>();
         if (upgradeApplier == null)
         {
@@ -79,7 +78,6 @@ public class UpgradeManagerUI : MonoBehaviour
 
     void Start()
     {
-        // Validate references
         if (player == null)
         {
             Debug.LogError("UpgradeManagerUI: Player not assigned!");
@@ -87,7 +85,6 @@ public class UpgradeManagerUI : MonoBehaviour
             return;
         }
 
-        // Get player components
         movementScript = player.GetComponent<MomentumMovement>();
         shootingScript = player.GetComponent<PlayerShooting>();
 
@@ -98,10 +95,7 @@ public class UpgradeManagerUI : MonoBehaviour
             return;
         }
 
-        // Set up button listeners
         SetupButtonListeners();
-
-        // Prewarm
         StartCoroutine(PrewarmAfterDelay());
 
         if (showDebugInfo)
@@ -146,17 +140,14 @@ public class UpgradeManagerUI : MonoBehaviour
 
     void OnEnable()
     {
-        // Re-setup button listeners
         SetupButtonListeners();
 
-        // If prewarming, only randomize
         if (isPrewarming)
         {
             RandomizeUpgrades();
             return;
         }
 
-        // Actually prepare upgrade room
         PrepareUpgradeRoom();
     }
 
@@ -185,10 +176,8 @@ public class UpgradeManagerUI : MonoBehaviour
 
     void OnDisable()
     {
-        // Re-enable player controls when leaving upgrade room
         ReenablePlayerControls();
 
-        // Clear button listeners
         if (upgradeButton1 != null) upgradeButton1.onClick.RemoveAllListeners();
         if (upgradeButton2 != null) upgradeButton2.onClick.RemoveAllListeners();
         if (upgradeButton3 != null) upgradeButton3.onClick.RemoveAllListeners();
@@ -200,22 +189,18 @@ public class UpgradeManagerUI : MonoBehaviour
 
         hasSelectedUpgrade = false;
 
-        // Disable pausing
         if (pauseManager != null)
         {
             pauseManager.SetCanPause(false);
             if (showDebugInfo) Debug.Log("Pausing DISABLED");
         }
 
-        // Pause game time
         Time.timeScale = 0f;
         if (showDebugInfo) Debug.Log("Game PAUSED (Time.timeScale = 0)");
 
-        // Disable player controls
         if (movementScript != null) movementScript.enabled = false;
         if (shootingScript != null) shootingScript.enabled = false;
 
-        // Disable camera & unlock cursor
         if (cameraControlScript != null)
         {
             cameraControlScript.enabled = false;
@@ -224,7 +209,6 @@ public class UpgradeManagerUI : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        // Show UI elements
         if (upgradeButton1 != null) upgradeButton1.gameObject.SetActive(true);
         if (upgradeButton2 != null) upgradeButton2.gameObject.SetActive(true);
         if (upgradeButton3 != null) upgradeButton3.gameObject.SetActive(true);
@@ -235,7 +219,6 @@ public class UpgradeManagerUI : MonoBehaviour
 
         if (showDebugInfo) Debug.Log("Upgrade buttons set to ACTIVE");
 
-        // Randomize upgrade choices
         RandomizeUpgrades();
     }
 
@@ -243,21 +226,16 @@ public class UpgradeManagerUI : MonoBehaviour
     {
         if (showDebugInfo) Debug.Log("Re-enabling player controls...");
 
-        // Re-enable pausing
         if (pauseManager != null) pauseManager.SetCanPause(true);
 
-        // Resume game time
         Time.timeScale = 1f;
         if (showDebugInfo) Debug.Log("Game RESUMED (Time.timeScale = 1)");
 
-        // Re-enable player controls
         if (movementScript != null) movementScript.enabled = true;
         if (shootingScript != null) shootingScript.enabled = true;
 
-        // Re-enable camera
         if (cameraControlScript != null) cameraControlScript.enabled = true;
 
-        // Lock cursor back
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
@@ -266,7 +244,6 @@ public class UpgradeManagerUI : MonoBehaviour
     {
         if (upgradeApplier == null) return;
 
-        // Get available upgrades from applier
         List<UpgradeApplier.UpgradeType> availableUpgrades = upgradeApplier.GetAvailableUpgrades();
 
         if (availableUpgrades.Count < 2)
@@ -275,10 +252,8 @@ public class UpgradeManagerUI : MonoBehaviour
             return;
         }
 
-        // Button 3 is ALWAYS Full Heal
         selectedUpgrade3 = UpgradeApplier.UpgradeType.FullHeal;
 
-        // Shuffle for buttons 1 and 2
         List<UpgradeApplier.UpgradeType> shuffled = new List<UpgradeApplier.UpgradeType>(availableUpgrades);
         for (int i = shuffled.Count - 1; i > 0; i--)
         {
@@ -288,11 +263,9 @@ public class UpgradeManagerUI : MonoBehaviour
             shuffled[randomIndex] = temp;
         }
 
-        // Button 1: First shuffled upgrade
         selectedUpgrade1 = shuffled[0];
 
-        // Button 2: Find first upgrade that's DIFFERENT from button 1
-        selectedUpgrade2 = shuffled[0]; // Default (will be replaced)
+        selectedUpgrade2 = shuffled[0];
         for (int i = 1; i < shuffled.Count; i++)
         {
             if (shuffled[i] != selectedUpgrade1)
@@ -302,14 +275,11 @@ public class UpgradeManagerUI : MonoBehaviour
             }
         }
 
-        // Safety check: if somehow button 2 is still same as button 1
         if (selectedUpgrade2 == selectedUpgrade1 && shuffled.Count > 1)
         {
-            // Just pick the second item in shuffled list
             selectedUpgrade2 = shuffled[1];
         }
 
-        // Update UI
         UpdateButtonSprite(upgradeButton1, selectedUpgrade1);
         UpdateButtonSprite(upgradeButton2, selectedUpgrade2);
         UpdateButtonSprite(upgradeButton3, selectedUpgrade3);
@@ -347,6 +317,8 @@ public class UpgradeManagerUI : MonoBehaviour
             case UpgradeApplier.UpgradeType.MaxHealth: spriteToAssign = maxHealthSprite; break;
             case UpgradeApplier.UpgradeType.ScoreMultiplier: spriteToAssign = scoreMultiplierSprite; break;
             case UpgradeApplier.UpgradeType.AngelicBlunderbuss: spriteToAssign = angelicBlunderbussSprite; break;
+            case UpgradeApplier.UpgradeType.LessGravity: spriteToAssign = lessGravitySprite; break;
+            case UpgradeApplier.UpgradeType.AngelWings: spriteToAssign = angelWingsSprite; break;
         }
 
         if (spriteToAssign != null)
@@ -365,7 +337,6 @@ public class UpgradeManagerUI : MonoBehaviour
 
         textLabel.text = $"{upgradeName}\n{upgradeDesc}";
 
-        // Gold for MAX, white for normal
         textLabel.color = isMaxLevel ? new Color(1f, 0.84f, 0f) : Color.white;
     }
 
@@ -379,7 +350,6 @@ public class UpgradeManagerUI : MonoBehaviour
 
         hasSelectedUpgrade = true;
 
-        // Determine which upgrade
         UpgradeApplier.UpgradeType selectedUpgrade = selectedUpgrade1;
         switch (buttonNumber)
         {
@@ -393,13 +363,11 @@ public class UpgradeManagerUI : MonoBehaviour
             Debug.Log($"Selected: {selectedUpgrade} from Button {buttonNumber}");
         }
 
-        // Apply the upgrade via applier
         if (upgradeApplier != null)
         {
             upgradeApplier.ApplyUpgrade(selectedUpgrade);
         }
 
-        // Play particle effect
         if (upgradeParticleEffect != null && player != null)
         {
             Instantiate(upgradeParticleEffect, player.transform.position, Quaternion.identity);
@@ -407,19 +375,14 @@ public class UpgradeManagerUI : MonoBehaviour
 
         if (showDebugInfo) Debug.Log("=== UPGRADE COMPLETE ===");
 
-        // Close upgrade room immediately
-        // (The button's OnClick will also trigger next floor progression)
         CloseUpgradeRoom();
     }
 
-    /// <summary>
-    /// PUBLIC: Call from Continue button onClick to close upgrade room
-    /// </summary>
     public void CloseUpgradeRoom()
     {
         if (showDebugInfo) Debug.Log("CloseUpgradeRoom() - unpausing");
 
         if (uiBlockerPanel != null) uiBlockerPanel.SetActive(false);
-        gameObject.SetActive(false); // Triggers OnDisable -> unpause
+        gameObject.SetActive(false);
     }
 }
