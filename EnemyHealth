@@ -5,24 +5,26 @@ public class EnemyHealth : MonoBehaviour
     [Header("Health Settings")]
     [Tooltip("Enemy's current health")]
     public int currentHealth = 3;
-
     [Tooltip("Maximum health")]
     public int maxHealth = 3;
 
     [Header("Audio")]
     [Tooltip("Audio clip to play when hit")]
     public AudioClip hitSound;
-
     [Tooltip("Audio clip to play on death")]
     public AudioClip deathSound;
-
     [Tooltip("Volume for hit sound (0-1)")]
     [Range(0f, 1f)]
     public float hitSoundVolume = 0.7f;
-
     [Tooltip("Volume for death sound (0-1)")]
     [Range(0f, 1f)]
     public float deathSoundVolume = 1f;
+
+    [Header("Damage Response")]
+    [Tooltip("Object to activate/show when taking damage")]
+    public GameObject objectToOpen;
+    [Tooltip("Duration to keep object open (0 = stays open)")]
+    public float openDuration = 0.5f;
 
     [Header("Death Effects (Optional)")]
     [Tooltip("Particle effect to spawn on death")]
@@ -33,6 +35,7 @@ public class EnemyHealth : MonoBehaviour
 
     // Private
     private Transform playerTransform;
+    private bool isObjectOpen = false;
 
     void Start()
     {
@@ -49,6 +52,12 @@ public class EnemyHealth : MonoBehaviour
         {
             Debug.LogWarning($"{gameObject.name}: Player not found! Sounds will play at enemy position.");
         }
+
+        // Make sure the object starts closed
+        if (objectToOpen != null)
+        {
+            objectToOpen.SetActive(false);
+        }
     }
 
     /// <summary>
@@ -61,6 +70,12 @@ public class EnemyHealth : MonoBehaviour
         if (showDebugInfo)
         {
             Debug.Log($"{gameObject.name} took {damageAmount} damage. Health: {currentHealth}/{maxHealth}");
+        }
+
+        // Open the object when taking damage
+        if (objectToOpen != null && currentHealth > 0)
+        {
+            OpenObject();
         }
 
         // Play hit sound at player location (only if still alive after damage)
@@ -77,12 +92,52 @@ public class EnemyHealth : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Opens the assigned object
+    /// </summary>
+    void OpenObject()
+    {
+        objectToOpen.SetActive(true);
+        isObjectOpen = true;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"{gameObject.name}: Opened {objectToOpen.name}");
+        }
+
+        // If a duration is set, close it after that time
+        if (openDuration > 0)
+        {
+            Invoke(nameof(CloseObject), openDuration);
+        }
+    }
+
+    /// <summary>
+    /// Closes the assigned object
+    /// </summary>
+    void CloseObject()
+    {
+        if (objectToOpen != null)
+        {
+            objectToOpen.SetActive(false);
+            isObjectOpen = false;
+
+            if (showDebugInfo)
+            {
+                Debug.Log($"{gameObject.name}: Closed {objectToOpen.name}");
+            }
+        }
+    }
+
     void Die()
     {
         if (showDebugInfo)
         {
             Debug.Log($"{gameObject.name} died!");
         }
+
+        // Cancel any pending close operations
+        CancelInvoke(nameof(CloseObject));
 
         // Award score to player
         if (ScoreManager.Instance != null)
