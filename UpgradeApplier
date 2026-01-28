@@ -25,8 +25,7 @@ public class UpgradeApplier : MonoBehaviour
 
     [Header("Special Upgrades")]
     public int angelicBlunderbussDamage = 3;
-    public float angelicBlunderbussRange = 50f;
-    public float angelicBlunderbussFireRate = 0.75f;
+    public float angelicBlunderbussRange = 100f;
     [Tooltip("Recoil amount for Angelic Blunderbuss (shotgun-style recoil)")]
     public float angelicBlunderbussRecoil = 2f;
     public GameObject normalGunModel;
@@ -378,11 +377,10 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.AngelicBlunderbuss:
                 if (!hasAngelicBlunderbuss)
                 {
-                    fireRateLevel = fireRateTiers.Length;
-                    shootingScript.fireRate = angelicBlunderbussFireRate;
+                    // Only modify damage, range, and recoil - fire rate stays as-is
                     shootingScript.shootRange = angelicBlunderbussRange;
                     shootingScript.damagePerShot = angelicBlunderbussDamage;
-                    shootingScript.recoilAmount = angelicBlunderbussRecoil; // Set shotgun recoil
+                    shootingScript.recoilAmount = angelicBlunderbussRecoil;
 
                     if (normalGunModel != null) normalGunModel.SetActive(false);
                     if (angelicBlunderbussModel != null) angelicBlunderbussModel.SetActive(true);
@@ -393,7 +391,8 @@ public class UpgradeApplier : MonoBehaviour
                     {
                         Debug.Log("========================================");
                         Debug.Log("ANGELIC BLUNDERBUSS ACQUIRED!");
-                        Debug.Log($"Damage: {angelicBlunderbussDamage} | Range: {angelicBlunderbussRange} | Fire Rate: {angelicBlunderbussFireRate}s | Recoil: {angelicBlunderbussRecoil}");
+                        Debug.Log($"Damage: {angelicBlunderbussDamage} | Range: {angelicBlunderbussRange} | Recoil: {angelicBlunderbussRecoil}");
+                        Debug.Log("Fire rate unchanged - keeps your upgrades!");
                         Debug.Log("========================================");
                     }
                 }
