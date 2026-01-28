@@ -21,6 +21,7 @@ public class UpgradeApplier : MonoBehaviour
     public float[] fireRateTiers = { 0.05f, 0.01f, 0.001f };
     public int[] maxHealthTiers = { 4, 5, 6 };
     public int[] scoreMultiplierTiers = { 10, 15, 20 };
+    public float[] gravityTiers = { 2.25f, 2f, 1.75f, 1.5f, 1.25f };
 
     [Header("Special Upgrades")]
     public int angelicBlunderbussDamage = 3;
@@ -45,7 +46,9 @@ public class UpgradeApplier : MonoBehaviour
     private int fireRateLevel = 0;
     private int maxHealthLevel = 0;
     private int scoreMultiplierLevel = 0;
+    private int gravityLevel = 0;
     private bool hasAngelicBlunderbuss = false;
+    private bool hasAngelWings = false;
 
     // Component references
     private MomentumMovement movementScript;
@@ -69,7 +72,9 @@ public class UpgradeApplier : MonoBehaviour
         FullHeal,
         MaxHealth,
         ScoreMultiplier,
-        AngelicBlunderbuss
+        AngelicBlunderbuss,
+        LessGravity,
+        AngelWings
     }
 
     void Awake()
@@ -115,6 +120,7 @@ public class UpgradeApplier : MonoBehaviour
             availableUpgrades.Add(UpgradeType.GroundDrag);
             availableUpgrades.Add(UpgradeType.AirDrag);
             availableUpgrades.Add(UpgradeType.FireRate);
+            availableUpgrades.Add(UpgradeType.LessGravity); // NEW: Common upgrade
         }
 
         // Jump upgrade (5 copies - less common)
@@ -141,12 +147,19 @@ public class UpgradeApplier : MonoBehaviour
             availableUpgrades.Add(UpgradeType.AngelicBlunderbuss);
         }
 
+        // Angel Wings (1 copy = ~1% chance)
+        if (!hasAngelWings)
+        {
+            availableUpgrades.Add(UpgradeType.AngelWings);
+        }
+
         // NOTE: FullHeal is NOT in pool - it's always shown on button 3
 
         if (showDebugInfo)
         {
             float angelicChance = hasAngelicBlunderbuss ? 0f : (1f / availableUpgrades.Count) * 100f;
-            Debug.Log($"Upgrade pool: {availableUpgrades.Count} | Angelic: {angelicChance:F2}%");
+            float wingsChance = hasAngelWings ? 0f : (1f / availableUpgrades.Count) * 100f;
+            Debug.Log($"Upgrade pool: {availableUpgrades.Count} | Angelic: {angelicChance:F2}% | Wings: {wingsChance:F2}%");
         }
     }
 
@@ -195,6 +208,8 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.MaxHealth: return maxHealthLevel >= maxHealthTiers.Length;
             case UpgradeType.ScoreMultiplier: return scoreMultiplierLevel >= scoreMultiplierTiers.Length;
             case UpgradeType.AngelicBlunderbuss: return hasAngelicBlunderbuss;
+            case UpgradeType.LessGravity: return gravityLevel >= gravityTiers.Length;
+            case UpgradeType.AngelWings: return hasAngelWings;
             default: return false;
         }
     }
@@ -215,6 +230,8 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.MaxHealth: return "Max Health";
             case UpgradeType.ScoreMultiplier: return "Score Multiplier";
             case UpgradeType.AngelicBlunderbuss: return "Angelic Blunderbuss";
+            case UpgradeType.LessGravity: return "Less Gravity";
+            case UpgradeType.AngelWings: return "Angel Wings";
             default: return "Unknown";
         }
     }
@@ -246,7 +263,11 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.ScoreMultiplier:
                 return scoreMultiplierLevel < scoreMultiplierTiers.Length ? $"-> {scoreMultiplierTiers[scoreMultiplierLevel]} pts/kill" : "MAX LEVEL";
             case UpgradeType.AngelicBlunderbuss:
-                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "";
+                return hasAngelicBlunderbuss ? "ALREADY OWNED" : "Legendary Shotgun";
+            case UpgradeType.LessGravity:
+                return gravityLevel < gravityTiers.Length ? $"-> {gravityTiers[gravityLevel]}x" : "MAX LEVEL";
+            case UpgradeType.AngelWings:
+                return hasAngelWings ? "ALREADY OWNED" : "Slide & Jump in Air";
             default:
                 return "";
         }
@@ -387,6 +408,33 @@ public class UpgradeApplier : MonoBehaviour
                     }
                 }
                 break;
+
+            case UpgradeType.LessGravity:
+                if (gravityLevel < gravityTiers.Length)
+                {
+                    movementScript.gravityMultiplier = gravityTiers[gravityLevel];
+                    if (showDebugInfo) Debug.Log($"Gravity Multiplier -> {gravityTiers[gravityLevel]}x");
+                    gravityLevel++;
+                }
+                break;
+
+            case UpgradeType.AngelWings:
+                if (!hasAngelWings)
+                {
+                    // Enable air slide and jump
+                    movementScript.EnableAngelWings();
+
+                    hasAngelWings = true;
+
+                    if (showDebugInfo)
+                    {
+                        Debug.Log("========================================");
+                        Debug.Log("ANGEL WINGS ACQUIRED!");
+                        Debug.Log("You can now slide and jump in the air!");
+                        Debug.Log("========================================");
+                    }
+                }
+                break;
         }
     }
 
@@ -402,8 +450,13 @@ public class UpgradeApplier : MonoBehaviour
         fireRateLevel = 0;
         maxHealthLevel = 0;
         scoreMultiplierLevel = 0;
+        gravityLevel = 0;
         hasAngelicBlunderbuss = false;
+        hasAngelWings = false;
 
         if (showDebugInfo) Debug.Log("All upgrades reset!");
     }
+
+    // Public getter for checking if player has Angel Wings
+    public bool HasAngelWings() => hasAngelWings;
 }
