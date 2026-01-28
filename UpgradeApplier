@@ -27,7 +27,7 @@ public class UpgradeApplier : MonoBehaviour
     public float angelicBlunderbussRange = 50f;
     public float angelicBlunderbussFireRate = 0.75f;
     [Tooltip("Recoil amount for Angelic Blunderbuss (shotgun-style recoil)")]
-    public float angelicBlunderbussRecoil = 15f;
+    public float angelicBlunderbussRecoil = 2f;
     public GameObject normalGunModel;
     public GameObject angelicBlunderbussModel;
 
