@@ -62,6 +62,7 @@ public class MomentumMovement : MonoBehaviour
     bool isGrounded;
     bool isSliding;
     bool isWallSliding;
+    bool hasAngelWings = false; // NEW: Angel Wings upgrade flag
 
     float normalHeight;
     float slideHeight;
@@ -124,6 +125,14 @@ public class MomentumMovement : MonoBehaviour
         ApplyExtraGravity();
         ApplyDrag();
         ClampSpeed();
+    }
+
+    // -------------------- Angel Wings --------------------
+
+    public void EnableAngelWings()
+    {
+        hasAngelWings = true;
+        Debug.Log("Angel Wings enabled! You can now slide and jump in the air!");
     }
 
     // -------------------- Footsteps --------------------
@@ -190,16 +199,33 @@ public class MomentumMovement : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Space))
         {
             if (isWallSliding)
+            {
                 WallJump();
+            }
             else if (isGrounded || coyoteCounter > 0f)
+            {
                 Jump();
+            }
+            else if (hasAngelWings) // NEW: Allow jump in air with Angel Wings
+            {
+                Jump();
+            }
         }
 
         if (Input.GetKeyDown(KeyCode.LeftShift))
         {
             float speed = HorizontalVelocity().magnitude;
-            if (isGrounded && speed >= slideMinSpeed)
+
+            // NEW: With Angel Wings, can slide in air
+            if (hasAngelWings)
+            {
+                if (speed >= slideMinSpeed)
+                    StartSlide();
+            }
+            else if (isGrounded && speed >= slideMinSpeed)
+            {
                 StartSlide();
+            }
         }
 
         if (Input.GetKeyUp(KeyCode.LeftShift))
