@@ -12,6 +12,8 @@ public class FloorWaveManager : MonoBehaviour
     [Tooltip("Where to spawn maps (usually Vector3.zero or specific location)")]
     public Transform mapSpawnLocation;
 
+    public GameObject playerLobby;
+
     [Header("Player")]
     [Tooltip("Player object to teleport")]
     public GameObject player;
@@ -46,6 +48,13 @@ public class FloorWaveManager : MonoBehaviour
 
     [Tooltip("Sound clip to play when wave is cleared")]
     public AudioClip waveClearSound;
+
+    [Header("Wave Start Sound")]
+    [Tooltip("Sound clip to play when wave starts")]
+    public AudioClip waveStartSound;
+
+    [Tooltip("Prefab to spawn when wave starts (e.g., visual effect with sound)")]
+    public GameObject waveStartEffectPrefab;
 
     [Header("Upgrade Room")]
     [Tooltip("Upgrade room object (disabled by default)")]
@@ -336,6 +345,18 @@ public class FloorWaveManager : MonoBehaviour
             Debug.Log($"=== WAVE {currentWave}/{totalWavesThisFloor} STARTING ===");
         }
 
+        // Play wave start sound
+        if (waveClearAudio != null && waveStartSound != null)
+        {
+            waveClearAudio.PlayOneShot(waveStartSound);
+        }
+
+        // Spawn wave start effect (if assigned)
+        if (waveStartEffectPrefab != null && player != null)
+        {
+            Instantiate(waveStartEffectPrefab, player.transform.position, Quaternion.identity);
+        }
+
         // Update UI - set wave
         if (floorUI != null)
         {
@@ -432,21 +453,21 @@ public class FloorWaveManager : MonoBehaviour
             Debug.Log($"=== WAVE {currentWave}/{totalWavesThisFloor} CLEARED ===");
         }
 
-        // Play wave clear sound
-        if (waveClearAudio != null && waveClearSound != null)
-        {
-            waveClearAudio.PlayOneShot(waveClearSound);
-        }
-
         // Check if this was the last wave
         if (currentWave >= totalWavesThisFloor)
         {
+            // LAST WAVE - Play wave clear sound
+            if (waveClearAudio != null && waveClearSound != null)
+            {
+                waveClearAudio.PlayOneShot(waveClearSound);
+            }
+
             // All waves cleared!
             AllWavesCleared();
         }
         else
         {
-            // More waves to go
+            // More waves to go - DON'T play sound
             if (showDebugInfo)
             {
                 Debug.Log($"Next wave in {waveClearDelay} seconds...");
@@ -588,6 +609,7 @@ public class FloorWaveManager : MonoBehaviour
                 }
             }
         }
+        playerLobby.SetActive(false);
     }
 
     public void OnContinueToNextFloor()
