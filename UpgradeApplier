@@ -119,26 +119,16 @@ public class UpgradeApplier : MonoBehaviour
             availableUpgrades.Add(UpgradeType.SlideBoost);
             availableUpgrades.Add(UpgradeType.GroundDrag);
             availableUpgrades.Add(UpgradeType.AirDrag);
-            availableUpgrades.Add(UpgradeType.FireRate);
-            availableUpgrades.Add(UpgradeType.LessGravity); // NEW: Common upgrade
+            availableUpgrades.Add(UpgradeType.LessGravity);
         }
 
-        // Jump upgrade (5 copies - less common)
+        // Rare upgrade (5 copies each)
         for (int i = 0; i < 5; i++)
         {
             availableUpgrades.Add(UpgradeType.JumpForce);
-        }
-
-        // Max Health (5 copies)
-        for (int i = 0; i < 5; i++)
-        {
             availableUpgrades.Add(UpgradeType.MaxHealth);
-        }
-
-        // Score multiplier (5 copies)
-        for (int i = 0; i < 5; i++)
-        {
             availableUpgrades.Add(UpgradeType.ScoreMultiplier);
+            availableUpgrades.Add(UpgradeType.FireRate);
         }
 
         // Angelic Blunderbuss (1 copy = ~1% chance)
@@ -267,7 +257,7 @@ public class UpgradeApplier : MonoBehaviour
             case UpgradeType.LessGravity:
                 return gravityLevel < gravityTiers.Length ? $"-> {gravityTiers[gravityLevel]}x" : "MAX LEVEL";
             case UpgradeType.AngelWings:
-                return hasAngelWings ? "ALREADY OWNED" : "Slide & Jump in Air";
+                return hasAngelWings ? "ALREADY OWNED" : "";
             default:
                 return "";
         }
